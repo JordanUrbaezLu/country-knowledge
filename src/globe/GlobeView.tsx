@@ -83,6 +83,13 @@ export default function GlobeView({
   const [crosshairName, setCrosshairName] = useState<string | null>(null);
   const ready = size.width > 0 && size.height > 0;
 
+  // Pre-allocated Three.js objects reused every poll frame (avoid GC pressure).
+  const raycasterRef = useRef(new THREE.Raycaster());
+  const ndcRef = useRef(new THREE.Vector2());
+  const hitRef = useRef(new THREE.Vector3());
+  // Globe sphere at origin, radius 100 (three-globe GLOBE_RADIUS constant).
+  const globeSphereRef = useRef(new THREE.Sphere(new THREE.Vector3(0, 0, 0), 100));
+
   const idToCountry = useMemo(() => new Map(countries.map((c) => [c.id, c])), [countries]);
 
   const polygons = useMemo<object[]>(() => {
@@ -222,28 +229,43 @@ export default function GlobeView({
 
       const gl = globeRef.current;
       const crosshairEl = crosshairRef.current;
-      const containerEl = containerRef.current;
-      if (!gl || !crosshairEl || !containerEl) return;
-
-      // Screen position of the crosshair centre, relative to the canvas.
-      const chRect = crosshairEl.getBoundingClientRect();
-      const cRect = containerEl.getBoundingClientRect();
-      const cx = chRect.left + chRect.width / 2 - cRect.left;
-      const cy = chRect.top + chRect.height / 2 - cRect.top;
+      if (!gl || !crosshairEl) return;
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const glAny = gl as any;
-      const globeXYZ = glAny.toGlobeCoords?.(cx, cy);
-      if (!globeXYZ) {
+      const camera: THREE.Camera | undefined = glAny.camera?.();
+      const renderer: THREE.WebGLRenderer | undefined = glAny.renderer?.();
+      if (!camera || !renderer) return;
+
+      // Crosshair centre in Normalised Device Coordinates (-1..1).
+      const canvas = renderer.domElement;
+      const cRect = canvas.getBoundingClientRect();
+      const chRect = crosshairEl.getBoundingClientRect();
+      const cx = chRect.left + chRect.width / 2;
+      const cy = chRect.top + chRect.height / 2;
+      ndcRef.current.set(
+        ((cx - cRect.left) / cRect.width) * 2 - 1,
+        -((cy - cRect.top) / cRect.height) * 2 + 1,
+      );
+
+      // Cast a ray from the camera through the crosshair and intersect the globe sphere.
+      raycasterRef.current.setFromCamera(ndcRef.current, camera);
+      if (!raycasterRef.current.ray.intersectSphere(globeSphereRef.current, hitRef.current)) {
         setHoveredId(null);
         setCrosshairName(null);
         return;
       }
 
-      const { lat, lng } = (glAny.toGeoCoords?.(globeXYZ) ?? {}) as { lat: number; lng: number };
-      if (lat == null || lng == null) return;
+      // Convert the 3D hit point to lat/lng using three-globe's exact cartesian2Polar formula.
+      // Source: node_modules/three-globe/dist/three-globe.mjs → cartesian2Polar()
+      const { x, y, z } = hitRef.current;
+      const R = 100; // GLOBE_RADIUS constant in three-globe
+      const phi = Math.acos(Math.max(-1, Math.min(1, y / R)));
+      const theta = Math.atan2(z, x);
+      const lat = 90 - phi * (180 / Math.PI);
+      const lng = 90 - theta * (180 / Math.PI) - (theta < -Math.PI / 2 ? 360 : 0);
 
-      // Check state features first (they're on top of the selected country).
+      // Check state features first (they're rendered on top of the selected country).
       if (stateFeatures && stateFeatures.length) {
         for (const sf of stateFeatures) {
           if (pointInGeometry(lng, lat, sf.geometry)) {
