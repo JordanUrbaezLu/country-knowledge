@@ -36,8 +36,8 @@ export default function ExplorePanel({ country, stateCount, onClose }: ExplorePa
         // --- shared ---
         "flex flex-col overflow-y-auto",
         "border border-slate-700/60 bg-slate-900/92 shadow-xl backdrop-blur",
-        // --- mobile: full-width bottom sheet ---
-        "fixed bottom-0 inset-x-0 max-h-[58vh] rounded-t-2xl border-b-0 pb-safe",
+        // --- mobile: compact bottom sheet (max ~40% of screen height) ---
+        "fixed bottom-0 inset-x-0 max-h-[42vh] rounded-t-2xl border-b-0 pb-safe",
         // --- desktop: right side panel ---
         "sm:absolute sm:inset-x-auto sm:bottom-auto sm:right-0 sm:top-0 sm:m-4 sm:w-72",
         "sm:max-h-[calc(100%-2rem)] sm:rounded-xl sm:border-b",
@@ -48,17 +48,17 @@ export default function ExplorePanel({ country, stateCount, onClose }: ExplorePa
         <div className="h-1 w-10 rounded-full bg-slate-600" />
       </div>
 
-      <div className="p-4">
-        <div className="flex items-start justify-between gap-2">
-          <div className="flex items-center gap-3">
+      <div className="p-3 sm:p-4">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
             {flag && (
               <img
                 src={flag}
                 alt={`Flag of ${country.name}`}
-                className="h-7 w-11 rounded border border-slate-600 object-cover"
+                className="h-6 w-9 rounded border border-slate-600 object-cover sm:h-7 sm:w-11"
               />
             )}
-            <h2 className="text-base font-bold leading-tight sm:text-lg">{country.name}</h2>
+            <h2 className="text-sm font-bold leading-tight sm:text-base">{country.name}</h2>
           </div>
           <button
             onClick={onClose}
@@ -69,29 +69,27 @@ export default function ExplorePanel({ country, stateCount, onClose }: ExplorePa
           </button>
         </div>
 
-        <dl className="mt-3 space-y-1.5 text-sm">
+        {/* Two-column grid on mobile for compact layout; single rows on desktop */}
+        <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-xs sm:mt-3 sm:block sm:space-y-1.5 sm:text-sm">
           {country.officialName !== country.name && (
-            <Row label="Official" value={country.officialName} />
+            <Row label="Official" value={country.officialName} span />
           )}
           <Row label="Capital" value={country.capital ?? "—"} />
           <Row label="Region" value={country.region || country.continent || "—"} />
           <Row label="Population" value={formatPop(country.population)} />
           <Row label="GDP" value={formatGdp(country.gdpMd)} />
-          <Row
-            label="GDP rank"
-            value={country.gdpRank ? `#${country.gdpRank} worldwide` : "—"}
-          />
-          {country.incomeGroup && <Row label="Income" value={country.incomeGroup} />}
+          <Row label="GDP rank" value={country.gdpRank ? `#${country.gdpRank}` : "—"} />
+          {country.incomeGroup && <Row label="Income" value={country.incomeGroup} span />}
         </dl>
 
         {country.knownFor.length > 0 && (
-          <div className="mt-3 border-t border-slate-700/60 pt-2">
-            <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">
+          <div className="mt-2 border-t border-slate-700/60 pt-2">
+            <p className="mb-0.5 text-xs font-semibold uppercase tracking-wide text-slate-400">
               Known for
             </p>
-            <ul className="space-y-1 text-sm text-slate-200">
+            <ul className="space-y-0.5 text-xs text-slate-200 sm:text-sm">
               {country.knownFor.map((line, i) => (
-                <li key={i} className="flex gap-2">
+                <li key={i} className="flex gap-1.5">
                   <span className="text-amber-400">•</span>
                   <span>{line}</span>
                 </li>
@@ -100,21 +98,21 @@ export default function ExplorePanel({ country, stateCount, onClose }: ExplorePa
           </div>
         )}
 
-        <p className="mt-3 border-t border-slate-700/60 pt-2 text-xs text-slate-400">
+        <p className="mt-2 border-t border-slate-700/60 pt-1.5 text-xs text-slate-400">
           {stateCount === null
             ? "Loading state borders…"
             : stateCount > 0
-              ? "States/provinces outlined — tap to name, tap again for a fact."
-              : "No state subdivisions available for this country."}
+              ? "Borders shown — tap a state for a fact."
+              : "No state data available."}
         </p>
       </div>
     </aside>
   );
 }
 
-function Row({ label, value }: { label: string; value: string }) {
+function Row({ label, value, span }: { label: string; value: string; span?: boolean }) {
   return (
-    <div className="flex justify-between gap-3">
+    <div className={`flex justify-between gap-2 ${span ? "col-span-2" : ""}`}>
       <dt className="text-slate-400">{label}</dt>
       <dd className="text-right font-medium text-slate-100">{value}</dd>
     </div>
