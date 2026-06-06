@@ -5,6 +5,9 @@ import { loadStateFeatures, type StateFeature } from "../data/states";
 import { stateFact } from "../data/stateFacts";
 import type { Country } from "../data/types";
 
+/** True on phones/tablets (touch primary), false on desktop (mouse primary). */
+const isTouchDevice = typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches;
+
 export default function ExploreView({ countries }: { countries: Country[] }) {
   const [selected, setSelected] = useState<Country | null>(null);
   const [stateFeatures, setStateFeatures] = useState<StateFeature[] | null>(null);
@@ -80,6 +83,7 @@ export default function ExploreView({ countries }: { countries: Country[] }) {
         selectedId={selected?.id ?? null}
         stateFeatures={stateFeatures}
         focus={focus}
+        crosshair={isTouchDevice}
         onCountryClick={handleClick}
         onStateClick={handleStateClick}
       />
@@ -109,7 +113,7 @@ export default function ExploreView({ countries }: { countries: Country[] }) {
           className={[
             "pointer-events-auto absolute left-1/2 w-full max-w-md -translate-x-1/2 px-4",
             selected
-              ? "bottom-[59vh] sm:bottom-6"
+              ? "bottom-[43vh] sm:bottom-6"
               : "bottom-6",
           ].join(" ")}
         >
