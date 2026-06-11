@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import Globe, { type GlobeMethods } from "react-globe.gl";
 import * as THREE from "three";
 import type { StateFeature } from "../data/states";
@@ -23,8 +23,11 @@ export interface GlobeViewProps {
   stateFeatures?: StateFeature[] | null;
   /**
    * Show a crosshair at a fixed point on the screen; whatever country/state is
-   * beneath it is continuously highlighted and named. Designed for touch devices
-   * where there is no hover cursor.
+   * beneath it is continuously highlighted and named. The pill under the
+   * reticle is tappable and triggers the same onCountryClick/onStateClick as
+   * tapping the polygon itself — i.e. the crosshair *is* the click on touch
+   * devices. With showLabels=false (game) the pill hides the name and renders
+   * a "Select this country" button instead.
    */
   crosshair?: boolean;
   onCountryClick?: (country: Country) => void;
@@ -45,7 +48,35 @@ const COLORS = {
   stateStroke: "#ffd24a",
 };
 
+// three-globe renders the globe as a sphere of this radius at the origin.
+const GLOBE_RADIUS = 100;
+
+// Vertical screen position of the crosshair (fraction of container height).
+// Sits at the centre of the area that stays visible above the mobile bottom
+// sheet; the focus effect below uses it to aim selections at the reticle.
+const CROSSHAIR_TOP = 0.32;
+
+// camera altitude used when focusing a country (globe radii above surface)
+const FOCUS_ALTITUDE = 1.6;
+
+/**
+ * Degrees of latitude between the screen centre and what the crosshair sees,
+ * for a camera fov (deg) at FOCUS_ALTITUDE. Law of sines on the triangle
+ * globe-centre → camera → ray/sphere intersection.
+ */
+function crosshairLatOffset(fovDeg: number): number {
+  const ndcY = 1 - 2 * CROSSHAIR_TOP; // crosshair in NDC (+0.36 = above centre)
+  const theta = Math.atan(ndcY * Math.tan(((fovDeg * Math.PI) / 180) / 2));
+  const s = (1 + FOCUS_ALTITUDE) * Math.sin(theta); // D·sinθ / R, D = R(1+alt)
+  if (s >= 1) return 0; // ray would miss the globe; keep plain centring
+  return ((Math.asin(s) - theta) * 180) / Math.PI;
+}
+
 const isState = (o: object): o is StateFeature => (o as StateFeature).__kind === "state";
+
+type CrosshairTarget =
+  | { kind: "country"; id: string; name: string; country: Country }
+  | { kind: "state"; id: string; name: string; state: StateFeature };
 
 function useElementSize<T extends HTMLElement>() {
   const ref = useRef<T>(null);
@@ -78,17 +109,20 @@ export default function GlobeView({
 }: GlobeViewProps) {
   const globeRef = useRef<GlobeMethods | undefined>(undefined);
   const { ref: containerRef, size } = useElementSize<HTMLDivElement>();
-  const crosshairRef = useRef<HTMLDivElement>(null);
+  // Fixed-size reticle box: the raycast samples ITS centre. The label pill is
+  // absolutely positioned below it so its appearance never moves the reticle
+  // (sampling the outer wrapper used to shift the probe point ~18px whenever
+  // the pill mounted, causing flicker near coastlines).
+  const reticleRef = useRef<HTMLDivElement>(null);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
-  const [crosshairName, setCrosshairName] = useState<string | null>(null);
+  const [crosshairTarget, setCrosshairTarget] = useState<CrosshairTarget | null>(null);
   const ready = size.width > 0 && size.height > 0;
 
   // Pre-allocated Three.js objects reused every poll frame (avoid GC pressure).
   const raycasterRef = useRef(new THREE.Raycaster());
   const ndcRef = useRef(new THREE.Vector2());
   const hitRef = useRef(new THREE.Vector3());
-  // Globe sphere at origin, radius 100 (three-globe GLOBE_RADIUS constant).
-  const globeSphereRef = useRef(new THREE.Sphere(new THREE.Vector3(0, 0, 0), 100));
+  const globeSphereRef = useRef(new THREE.Sphere(new THREE.Vector3(0, 0, 0), GLOBE_RADIUS));
 
   const idToCountry = useMemo(() => new Map(countries.map((c) => [c.id, c])), [countries]);
 
@@ -107,61 +141,95 @@ export default function GlobeView({
     [],
   );
 
-  const capColor = (obj: object): string => {
-    if (isState(obj)) {
-      return obj.__id === hoveredId ? COLORS.stateFillHover : COLORS.stateFill;
-    }
-    const id = (obj as CountryFeature).__id;
-    if (id === highlightId) return COLORS.highlight;
-    if (id === selectedId) return COLORS.selected;
-    if (id === hoveredId) return COLORS.hover;
-    return highlightId ? COLORS.landDim : COLORS.land;
-  };
+  // Accessors are memoized so a re-render that doesn't change what they read
+  // (e.g. the crosshair pill updating) doesn't hand globe.gl new props and
+  // force a full polygon restyle.
+  const capColor = useCallback(
+    (obj: object): string => {
+      if (isState(obj)) {
+        return obj.__id === hoveredId ? COLORS.stateFillHover : COLORS.stateFill;
+      }
+      const id = (obj as CountryFeature).__id;
+      if (id === highlightId) return COLORS.highlight;
+      if (id === selectedId) return COLORS.selected;
+      if (id === hoveredId) return COLORS.hover;
+      return highlightId ? COLORS.landDim : COLORS.land;
+    },
+    [hoveredId, highlightId, selectedId],
+  );
 
-  const sideColor = (obj: object): string => {
-    if (isState(obj)) return obj.__id === hoveredId ? "rgba(255, 210, 74, 0.4)" : "rgba(0,0,0,0)";
-    return "rgba(15, 30, 60, 0.7)";
-  };
+  const sideColor = useCallback(
+    (obj: object): string => {
+      if (isState(obj)) return obj.__id === hoveredId ? "rgba(255, 210, 74, 0.4)" : "rgba(0,0,0,0)";
+      return "rgba(15, 30, 60, 0.7)";
+    },
+    [hoveredId],
+  );
 
-  const strokeColor = (obj: object): string =>
-    isState(obj) ? COLORS.stateStroke : "#86b0e8";
+  const strokeColor = useCallback(
+    (obj: object): string => (isState(obj) ? COLORS.stateStroke : "#86b0e8"),
+    [],
+  );
 
-  const altitude = (obj: object): number => {
-    if (isState(obj)) return obj.__id === hoveredId ? 0.03 : 0.012;
-    const id = (obj as CountryFeature).__id;
-    if (id === highlightId) return 0.06;
-    if (id === hoveredId || id === selectedId) return 0.02;
-    return 0.01;
-  };
+  // Altitude changes rebuild polygon geometry, which is expensive across ~180
+  // countries — on touch devices the crosshair sweeps hover constantly while
+  // panning, so hover there is colour-only (no lift).
+  const altitude = useCallback(
+    (obj: object): number => {
+      if (isState(obj)) return !crosshair && obj.__id === hoveredId ? 0.03 : 0.012;
+      const id = (obj as CountryFeature).__id;
+      if (id === highlightId) return 0.06;
+      if (id === selectedId) return 0.02;
+      if (!crosshair && id === hoveredId) return 0.02;
+      return 0.01;
+    },
+    [hoveredId, highlightId, selectedId, crosshair],
+  );
 
-  const label = (obj: object): string => {
-    // On mobile/crosshair mode we suppress globe.gl's floating tooltip — the
-    // crosshair overlay shows the name instead.
-    if (crosshair) return "";
-    if (isState(obj)) {
-      return `<div style="background:rgba(60,40,5,.92);color:#ffd24a;padding:4px 8px;border-radius:6px;font:600 13px system-ui;border:1px solid rgba(255,210,74,.5)">${obj.__name}</div>`;
-    }
-    if (!showLabels) return "";
-    const c = idToCountry.get((obj as CountryFeature).__id);
-    return c
-      ? `<div style="background:rgba(5,7,15,.85);color:#e8edf6;padding:4px 8px;border-radius:6px;font:600 13px system-ui;border:1px solid rgba(125,170,224,.4)">${c.name}</div>`
-      : "";
-  };
+  const label = useCallback(
+    (obj: object): string => {
+      // On mobile/crosshair mode we suppress globe.gl's floating tooltip — the
+      // crosshair pill shows the name instead.
+      if (crosshair) return "";
+      if (isState(obj)) {
+        return `<div style="background:rgba(60,40,5,.92);color:#ffd24a;padding:4px 8px;border-radius:6px;font:600 13px system-ui;border:1px solid rgba(255,210,74,.5)">${obj.__name}</div>`;
+      }
+      if (!showLabels) return "";
+      const c = idToCountry.get((obj as CountryFeature).__id);
+      return c
+        ? `<div style="background:rgba(5,7,15,.85);color:#e8edf6;padding:4px 8px;border-radius:6px;font:600 13px system-ui;border:1px solid rgba(125,170,224,.4)">${c.name}</div>`
+        : "";
+    },
+    [crosshair, showLabels, idToCountry],
+  );
 
-  const handleClick = (obj: object) => {
-    if (isState(obj)) { onStateClick?.(obj); return; }
-    const c = idToCountry.get((obj as CountryFeature).__id);
-    if (c) onCountryClick?.(c);
-  };
+  const handleClick = useCallback(
+    (obj: object) => {
+      if (isState(obj)) { onStateClick?.(obj); return; }
+      const c = idToCountry.get((obj as CountryFeature).__id);
+      if (c) onCountryClick?.(c);
+    },
+    [idToCountry, onCountryClick, onStateClick],
+  );
 
-  const handleHover = (obj: object | null) => {
-    // On crosshair mode the poll loop drives hoveredId; ignore globe.gl mouse events.
-    if (crosshair) return;
-    if (obj && isState(obj)) { setHoveredId(obj.__id); onCountryHover?.(null); return; }
-    const id = obj ? (obj as CountryFeature).__id : null;
-    setHoveredId(id);
-    onCountryHover?.(id ? (idToCountry.get(id) ?? null) : null);
-  };
+  const handleHover = useCallback(
+    (obj: object | null) => {
+      // On crosshair mode the poll loop drives hoveredId; ignore globe.gl mouse events.
+      if (crosshair) return;
+      if (obj && isState(obj)) { setHoveredId(obj.__id); onCountryHover?.(null); return; }
+      const id = obj ? (obj as CountryFeature).__id : null;
+      setHoveredId(id);
+      onCountryHover?.(id ? (idToCountry.get(id) ?? null) : null);
+    },
+    [crosshair, idToCountry, onCountryHover],
+  );
+
+  // The crosshair pill mimics a real click on whatever is under the reticle.
+  const handleCrosshairSelect = useCallback(() => {
+    if (!crosshairTarget) return;
+    if (crosshairTarget.kind === "state") onStateClick?.(crosshairTarget.state);
+    else onCountryClick?.(crosshairTarget.country);
+  }, [crosshairTarget, onCountryClick, onStateClick]);
 
   // Orbit controls setup.
   useEffect(() => {
@@ -181,10 +249,17 @@ export default function GlobeView({
   }, [ready]);
 
   useEffect(() => {
-    if (ready && focus) {
-      globeRef.current?.pointOfView({ lat: focus.lat, lng: focus.lng, altitude: 1.6 }, 800);
+    if (!ready || !focus) return;
+    let lat = focus.lat;
+    if (crosshair) {
+      // Land the focused country under the reticle, not the screen centre
+      // (which sits behind/near the bottom sheet on phones).
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const camera = (globeRef.current as any)?.camera?.();
+      lat = clamp(lat - crosshairLatOffset(camera?.fov ?? 50), -85, 85);
     }
-  }, [focus, ready]);
+    globeRef.current?.pointOfView({ lat, lng: focus.lng, altitude: FOCUS_ALTITUDE }, 800);
+  }, [focus, ready, crosshair]);
 
   // Trackpad two-finger → rotate.
   useEffect(() => {
@@ -207,20 +282,27 @@ export default function GlobeView({
     return () => container.removeEventListener("wheel", onWheel, { capture: true });
   }, [ready, trackpadRotate, containerRef]);
 
+  // Clear any stale crosshair-driven hover state when the crosshair goes away.
+  useEffect(() => {
+    if (!crosshair) {
+      setCrosshairTarget(null);
+      setHoveredId(null);
+    }
+  }, [crosshair]);
+
   /**
-   * Crosshair polling loop — runs at ~8 fps to detect what's under the
-   * crosshair element and drive hoveredId + crosshairName.
-   *
-   * Uses globe.gl's coordinate helpers:
-   *   toGlobeCoords(screenX, screenY) → {x,y,z} on globe surface or null
-   *   toGeoCoords({x,y,z})            → {lat, lng, altitude}
-   * Then performs a point-in-polygon test against the active feature set.
+   * Crosshair polling loop (~10 fps): raycast from the camera through the
+   * reticle centre, intersect the globe sphere, convert the hit to lat/lng
+   * (three-globe's cartesian2Polar formula), then point-in-polygon test the
+   * active feature set. Skips everything while the camera is at rest.
    */
   useEffect(() => {
     if (!crosshair || !ready) return;
     let raf: number;
     let last = 0;
-    const INTERVAL = 120; // ms
+    const INTERVAL = 100; // ms between raycasts while the camera moves
+    let lastCam: number[] | null = null;
+    let lastId: string | null | undefined; // undefined → force first detection
 
     const poll = (ts: number) => {
       raf = requestAnimationFrame(poll);
@@ -228,8 +310,8 @@ export default function GlobeView({
       last = ts;
 
       const gl = globeRef.current;
-      const crosshairEl = crosshairRef.current;
-      if (!gl || !crosshairEl) return;
+      const reticleEl = reticleRef.current;
+      if (!gl || !reticleEl) return;
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const glAny = gl as any;
@@ -237,10 +319,16 @@ export default function GlobeView({
       const renderer: THREE.WebGLRenderer | undefined = glAny.renderer?.();
       if (!camera || !renderer) return;
 
-      // Crosshair centre in Normalised Device Coordinates (-1..1).
+      // Idle skip: no camera movement since the last sample → nothing to do.
+      const { position: p, quaternion: q } = camera;
+      const cam = [p.x, p.y, p.z, q.x, q.y, q.z, q.w];
+      if (lastCam && lastId !== undefined && cam.every((v, i) => v === lastCam![i])) return;
+      lastCam = cam;
+
+      // Reticle centre in Normalised Device Coordinates (-1..1).
       const canvas = renderer.domElement;
       const cRect = canvas.getBoundingClientRect();
-      const chRect = crosshairEl.getBoundingClientRect();
+      const chRect = reticleEl.getBoundingClientRect();
       const cx = chRect.left + chRect.width / 2;
       const cy = chRect.top + chRect.height / 2;
       ndcRef.current.set(
@@ -248,19 +336,24 @@ export default function GlobeView({
         -((cy - cRect.top) / cRect.height) * 2 + 1,
       );
 
-      // Cast a ray from the camera through the crosshair and intersect the globe sphere.
+      const apply = (id: string | null, target: CrosshairTarget | null) => {
+        if (id === lastId) return;
+        lastId = id;
+        setHoveredId(id);
+        setCrosshairTarget(target);
+        onCountryHover?.(target?.kind === "country" ? target.country : null);
+      };
+
+      // Cast a ray from the camera through the reticle and intersect the globe sphere.
       raycasterRef.current.setFromCamera(ndcRef.current, camera);
       if (!raycasterRef.current.ray.intersectSphere(globeSphereRef.current, hitRef.current)) {
-        setHoveredId(null);
-        setCrosshairName(null);
+        apply(null, null);
         return;
       }
 
       // Convert the 3D hit point to lat/lng using three-globe's exact cartesian2Polar formula.
-      // Source: node_modules/three-globe/dist/three-globe.mjs → cartesian2Polar()
       const { x, y, z } = hitRef.current;
-      const R = 100; // GLOBE_RADIUS constant in three-globe
-      const phi = Math.acos(Math.max(-1, Math.min(1, y / R)));
+      const phi = Math.acos(Math.max(-1, Math.min(1, y / GLOBE_RADIUS)));
       const theta = Math.atan2(z, x);
       const lat = 90 - phi * (180 / Math.PI);
       const lng = 90 - theta * (180 / Math.PI) - (theta < -Math.PI / 2 ? 360 : 0);
@@ -269,8 +362,7 @@ export default function GlobeView({
       if (stateFeatures && stateFeatures.length) {
         for (const sf of stateFeatures) {
           if (pointInGeometry(lng, lat, sf.geometry)) {
-            setHoveredId(sf.__id);
-            setCrosshairName(sf.__name);
+            apply(sf.__id, { kind: "state", id: sf.__id, name: sf.__name, state: sf });
             return;
           }
         }
@@ -279,21 +371,29 @@ export default function GlobeView({
       // Then check country features.
       for (const c of countries) {
         if (pointInGeometry(lng, lat, c.feature.geometry)) {
-          setHoveredId(c.id);
-          setCrosshairName(c.name);
-          onCountryHover?.(c);
+          apply(c.id, { kind: "country", id: c.id, name: c.name, country: c });
           return;
         }
       }
 
-      setHoveredId(null);
-      setCrosshairName(null);
-      onCountryHover?.(null);
+      apply(null, null);
     };
 
     raf = requestAnimationFrame(poll);
     return () => cancelAnimationFrame(raf);
-  }, [crosshair, ready, countries, stateFeatures, onCountryHover, containerRef]);
+  }, [crosshair, ready, countries, stateFeatures, onCountryHover]);
+
+  // What the crosshair pill renders:
+  //  - explore (showLabels): the target's name — tap to select it.
+  //  - game (no labels): a "Select this country" button, name hidden.
+  const pill =
+    crosshair && crosshairTarget
+      ? showLabels
+        ? { text: `${crosshairTarget.name} ›`, state: crosshairTarget.kind === "state" }
+        : crosshairTarget.kind === "country" && onCountryClick
+          ? { text: "Select this country", state: false }
+          : null
+      : null;
 
   return (
     <div ref={containerRef} className="absolute inset-0">
@@ -313,29 +413,41 @@ export default function GlobeView({
           polygonStrokeColor={strokeColor}
           polygonAltitude={altitude}
           polygonLabel={label}
-          polygonsTransitionDuration={300}
+          polygonsTransitionDuration={crosshair ? 0 : 300}
           onPolygonClick={handleClick}
           onPolygonHover={handleHover}
         />
       )}
 
-      {/* Crosshair overlay — mobile only, driven by the poll loop above */}
+      {/* Crosshair overlay — touch devices only, driven by the poll loop above */}
       {crosshair && ready && (
         <div
-          ref={crosshairRef}
-          className="pointer-events-none absolute left-1/2 top-[32%] -translate-x-1/2 -translate-y-1/2"
+          ref={reticleRef}
+          style={{ top: `${CROSSHAIR_TOP * 100}%` }}
+          className="pointer-events-none absolute left-1/2 h-10 w-10 -translate-x-1/2 -translate-y-1/2"
         >
           {/* The + arms */}
-          <div className="relative flex h-10 w-10 items-center justify-center">
-            <div className="absolute left-1/2 top-0 h-full w-px -translate-x-1/2 bg-white/50" />
-            <div className="absolute top-1/2 h-px w-full -translate-y-1/2 bg-white/50" />
-            {/* Centre dot */}
-            <div className="h-1.5 w-1.5 rounded-full bg-white/80" />
-          </div>
-          {/* Country/state name label */}
-          {crosshairName && (
-            <div className="mt-2 whitespace-nowrap rounded-full border border-white/20 bg-slate-900/80 px-3 py-1 text-center text-sm font-semibold text-slate-100 backdrop-blur">
-              {crosshairName}
+          <div className="absolute left-1/2 top-0 h-full w-px -translate-x-1/2 bg-white/60 shadow-[0_0_2px_rgba(0,0,0,0.9)]" />
+          <div className="absolute top-1/2 h-px w-full -translate-y-1/2 bg-white/60 shadow-[0_0_2px_rgba(0,0,0,0.9)]" />
+          {/* Centre dot */}
+          <div className="absolute left-1/2 top-1/2 h-1.5 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white/90 shadow-[0_0_3px_rgba(0,0,0,0.9)]" />
+
+          {/* Tappable action pill, absolutely positioned so the reticle never shifts */}
+          {pill && (
+            <div className="absolute left-1/2 top-full mt-2 -translate-x-1/2">
+              <button
+                onClick={handleCrosshairSelect}
+                className={[
+                  "pointer-events-auto whitespace-nowrap rounded-full border px-4 py-1.5 text-sm font-semibold shadow-lg backdrop-blur",
+                  pill.state
+                    ? "border-amber-400/40 bg-slate-900/85 text-amber-300 active:bg-slate-800"
+                    : showLabels
+                      ? "border-white/20 bg-slate-900/80 text-slate-100 active:bg-slate-800"
+                      : "border-sky-300/40 bg-sky-500 text-slate-950 active:bg-sky-300",
+                ].join(" ")}
+              >
+                {pill.text}
+              </button>
             </div>
           )}
         </div>

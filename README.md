@@ -14,6 +14,11 @@ world, then test yourself with a 10-question quiz.
   2. 🏳️ **Flag → identify** — name the country from its flag.
   3. 🌍 **Name → find** — click the named country on the globe.
   Running score, typo tolerance, and a best-score saved to `localStorage`.
+- **Mobile crosshair** — on touch devices a centre-screen reticle continuously names whatever
+  country (or state, once one is selected) sits beneath it; tapping the pill selects it, the
+  same as a click. The name→find quiz question uses the reticle too: aim, then tap
+  **Select this country** (names stay hidden). Selecting a country focuses it under the
+  reticle, and the quiz input lifts above the iOS keyboard.
 
 ## Tech stack
 
@@ -25,7 +30,7 @@ world, then test yourself with a 10-question quiz.
 | Country borders | Natural Earth `ne_110m_admin_0_countries` (vendored in `public/`) |
 | State borders | Natural Earth `ne_10m_admin_1_states_provinces`, pre-split per country into `public/states/` |
 | Country metadata | [`world-countries`](https://www.npmjs.com/package/world-countries) (names, capitals, ISO codes) |
-| Flags | [flagcdn.com](https://flagcdn.com) SVGs by ISO alpha-2 |
+| Flags | SVGs vendored from `world-countries` into `public/flags/` by `scripts/build-flags.mjs` (no CDN dependency) |
 | Game state | Zustand |
 | Styling | Tailwind CSS v4 |
 | Tests | Vitest |
@@ -41,6 +46,11 @@ npm run build     # typecheck + production build
 npm run preview   # serve the production build
 npm run test      # run the unit tests (data normalization + answer matching)
 ```
+
+To try it on a phone, run `npm run dev -- --host` and open the LAN URL it prints.
+With the dev server running, `node scripts/mobile-verify.mjs <url>` drives the full
+mobile (emulated iPhone) + desktop flows end-to-end with Playwright, and
+`node scripts/ui-tour.mjs <url>` captures screenshots of every screen to `/tmp/`.
 
 ## Data notes
 
@@ -63,16 +73,18 @@ npm run test      # run the unit tests (data normalization + answer matching)
 src/
   data/        country + state loading and normalization (+ tests)
   game/        zustand store, question generation, answer matching (+ tests)
-  globe/       GlobeView — the react-globe.gl wrapper (rendering, controls, trackpad rotate)
+  globe/       GlobeView — the react-globe.gl wrapper (rendering, controls, trackpad rotate,
+               mobile crosshair raycasting + select pill)
   explore/     ExploreView — click-to-inspect + state borders
   components/  ExplorePanel, QuizHud, Results, ModeSwitcher
-  lib/         text normalization + Levenshtein
-scripts/       build-states.mjs (data preprocessing)
+  lib/         text normalization + Levenshtein, touch detection, keyboard inset hook
+scripts/       build-states.mjs / build-flags.mjs (data preprocessing),
+               mobile-verify.mjs / ui-tour.mjs (Playwright end-to-end checks)
 public/        vendored Natural Earth geojson + generated states/
 ```
 
 ## Attribution
 
 Map data © [Natural Earth](https://www.naturalearthdata.com/) (public domain).
-Country metadata from [`world-countries`](https://github.com/mledoze/countries) (ODbL).
-Flag images from [flagcdn.com](https://flagcdn.com).
+Country metadata and flag images from
+[`world-countries`](https://github.com/mledoze/countries) (ODbL).
