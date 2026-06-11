@@ -4,9 +4,7 @@ import GlobeView from "../globe/GlobeView";
 import { loadStateFeatures, type StateFeature } from "../data/states";
 import { stateFact } from "../data/stateFacts";
 import type { Country } from "../data/types";
-
-/** True on phones/tablets (touch primary), false on desktop (mouse primary). */
-const isTouchDevice = typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches;
+import { isTouchDevice } from "../lib/device";
 
 export default function ExploreView({ countries }: { countries: Country[] }) {
   const [selected, setSelected] = useState<Country | null>(null);

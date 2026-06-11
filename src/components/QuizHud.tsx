@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { flagUrl } from "../data/countries";
 import { MODE_LABELS } from "../game/questions";
 import { useGame } from "../game/store";
+import { isTouchDevice } from "../lib/device";
+import { useKeyboardInset } from "../lib/useKeyboardInset";
 
 export default function QuizHud() {
   const { status, questions, index, score, best, lastCorrect, lastGiven } = useGame();
@@ -10,6 +12,9 @@ export default function QuizHud() {
 
   const [value, setValue] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
+  // iOS Safari keeps the layout viewport full-height when the keyboard opens,
+  // so the bottom-anchored HUD must be lifted by the keyboard's height.
+  const keyboardInset = useKeyboardInset();
 
   const q = questions[index];
   const isTyped = q?.mode === "locate" || q?.mode === "flag";
@@ -37,7 +42,10 @@ export default function QuizHud() {
   };
 
   return (
-    <div className="pointer-events-none absolute inset-x-0 bottom-0 flex flex-col items-center gap-2 px-3 pb-safe pt-2 sm:gap-3 sm:p-5">
+    <div
+      className="pointer-events-none absolute inset-x-0 bottom-0 flex flex-col items-center gap-2 px-3 pb-safe pt-2 transition-transform duration-200 sm:gap-3 sm:p-5"
+      style={keyboardInset ? { transform: `translateY(-${keyboardInset}px)` } : undefined}
+    >
       <div className="pointer-events-auto flex items-center gap-3 text-sm text-slate-300 sm:gap-4">
         <span>
           Q <strong className="text-slate-100">{index + 1}</strong>/{questions.length}
@@ -90,7 +98,9 @@ export default function QuizHud() {
             </form>
           ) : (
             <p className="mt-1 text-center text-sm text-slate-400">
-              Tap the country on the globe.
+              {isTouchDevice
+                ? "Aim the crosshair at the country, then tap Select."
+                : "Tap the country on the globe."}
             </p>
           )
         ) : (

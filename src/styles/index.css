@@ -12,6 +12,30 @@ body,
   overflow: hidden;
 }
 
+/* iOS Safari: 100% tracks the layout viewport, which is taller than what's
+   visible while the URL bar is shown — dvh tracks the *visible* viewport. */
+@supports (height: 100dvh) {
+  html,
+  body,
+  #root {
+    height: 100dvh;
+  }
+}
+
+body {
+  /* no pull-to-refresh / rubber-banding while dragging the globe */
+  overscroll-behavior: none;
+  /* no grey flash on tap (we style :active states ourselves) */
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Kill the 300ms double-tap-to-zoom delay on controls (globe canvas already
+   sets touch-action: none via three.js). */
+button,
+input {
+  touch-action: manipulation;
+}
+
 /* Safe area helpers for iPhone notch / Dynamic Island / home indicator */
 .pt-safe { padding-top: max(0.75rem, env(safe-area-inset-top)); }
 .pb-safe { padding-bottom: max(1rem, env(safe-area-inset-bottom)); }

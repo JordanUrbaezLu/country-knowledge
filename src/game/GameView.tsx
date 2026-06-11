@@ -3,6 +3,7 @@ import QuizHud from "../components/QuizHud";
 import Results from "../components/Results";
 import GlobeView from "../globe/GlobeView";
 import type { Country } from "../data/types";
+import { isTouchDevice } from "../lib/device";
 import { useGame } from "./store";
 
 export default function GameView({ countries }: { countries: Country[] }) {
@@ -27,6 +28,11 @@ export default function GameView({ countries }: { countries: Country[] }) {
   const onCountryClick =
     status === "playing" && q?.mode === "name" ? answerClick : undefined;
 
+  // On touch devices the name→find question is answered with the crosshair:
+  // aim the reticle at a country and tap its "Select this country" button
+  // (showLabels=false keeps country names hidden, same as desktop).
+  const crosshair = isTouchDevice && status === "playing" && q?.mode === "name";
+
   return (
     <>
       <GlobeView
@@ -34,6 +40,7 @@ export default function GameView({ countries }: { countries: Country[] }) {
         showLabels={false}
         highlightId={highlightId}
         focus={focus}
+        crosshair={crosshair}
         onCountryClick={onCountryClick}
       />
 
@@ -53,7 +60,9 @@ function StartCard({ best, onStart }: { best: number; onStart: () => void }) {
         <ul className="mx-auto mt-2 max-w-xs space-y-1 text-left text-sm text-slate-400">
           <li>🟠 A country lights up — type its name</li>
           <li>🏳️ Identify a country from its flag</li>
-          <li>🌍 Find a named country and tap it</li>
+          <li>
+            🌍 Find a named country {isTouchDevice ? "with the crosshair" : "and click it"}
+          </li>
         </ul>
         {best > 0 && <p className="mt-3 text-sm text-slate-500">Best so far: {best}/10</p>}
         <button
