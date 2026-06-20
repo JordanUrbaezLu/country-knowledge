@@ -1,14 +1,17 @@
 import { useMemo } from "react";
+import DifficultyPicker from "../components/DifficultyPicker";
 import QuizHud from "../components/QuizHud";
 import Results from "../components/Results";
 import GlobeView from "../globe/GlobeView";
 import type { Country } from "../data/types";
 import { isTouchDevice } from "../lib/device";
+import type { Difficulty } from "./questions";
 import { useGame } from "./store";
 
 export default function GameView({ countries }: { countries: Country[] }) {
-  const { status, questions, index, best } = useGame();
+  const { status, questions, index, best, difficulty } = useGame();
   const start = useGame((s) => s.start);
+  const setDifficulty = useGame((s) => s.setDifficulty);
   const answerClick = useGame((s) => s.answerClick);
 
   const q = questions[index];
@@ -44,14 +47,31 @@ export default function GameView({ countries }: { countries: Country[] }) {
         onCountryClick={onCountryClick}
       />
 
-      {status === "idle" && <StartCard best={best} onStart={() => start(countries)} />}
+      {status === "idle" && (
+        <StartCard
+          best={best}
+          difficulty={difficulty}
+          onDifficulty={setDifficulty}
+          onStart={() => start(countries, difficulty)}
+        />
+      )}
       {(status === "playing" || status === "feedback") && <QuizHud />}
-      {status === "done" && <Results onReplay={() => start(countries)} />}
+      {status === "done" && <Results onReplay={() => start(countries, difficulty)} />}
     </>
   );
 }
 
-function StartCard({ best, onStart }: { best: number; onStart: () => void }) {
+function StartCard({
+  best,
+  difficulty,
+  onDifficulty,
+  onStart,
+}: {
+  best: number;
+  difficulty: Difficulty;
+  onDifficulty: (d: Difficulty) => void;
+  onStart: () => void;
+}) {
   return (
     <div className="absolute inset-0 flex items-end justify-center p-4 pb-safe sm:items-center sm:p-5">
       <div className="w-full max-w-md rounded-2xl border border-slate-700/60 bg-slate-900/92 p-5 text-center shadow-2xl backdrop-blur sm:p-6">
@@ -64,6 +84,9 @@ function StartCard({ best, onStart }: { best: number; onStart: () => void }) {
             🌍 Find a named country {isTouchDevice ? "with the crosshair" : "and click it"}
           </li>
         </ul>
+        <div className="mt-4">
+          <DifficultyPicker value={difficulty} onChange={onDifficulty} />
+        </div>
         {best > 0 && <p className="mt-3 text-sm text-slate-500">Best so far: {best}/10</p>}
         <button
           onClick={onStart}

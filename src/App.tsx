@@ -3,6 +3,7 @@ import ModeSwitcher, { type AppMode } from "./components/ModeSwitcher";
 import { useCountries } from "./data/useCountries";
 import ExploreView from "./explore/ExploreView";
 import GameView from "./game/GameView";
+import MultiplayerView from "./multiplayer/MultiplayerView";
 
 function Splash({ text }: { text: string }) {
   return (
@@ -12,27 +13,35 @@ function Splash({ text }: { text: string }) {
   );
 }
 
+/** A ?room=CODE share link drops you straight into multiplayer. */
+const initialRoom: string | null =
+  typeof location !== "undefined" ? new URLSearchParams(location.search).get("room") : null;
+
+const HEADER_SUBTITLE: Record<AppMode, string> = {
+  explore: "Click a country for its flag, capital & state borders",
+  solo: "Test yourself with a 10-question round",
+  multiplayer: "Create a room and play with your family",
+};
+
 export default function App() {
   const { countries, error } = useCountries();
-  const [mode, setMode] = useState<AppMode>("explore");
+  const [mode, setMode] = useState<AppMode>(initialRoom ? "multiplayer" : "explore");
 
   return (
     <div className="relative h-full w-full">
       {countries &&
         (mode === "explore" ? (
           <ExploreView countries={countries} />
-        ) : (
+        ) : mode === "solo" ? (
           <GameView countries={countries} />
+        ) : (
+          <MultiplayerView countries={countries} initialCode={initialRoom} />
         ))}
 
       {/* Header — compact on mobile so it doesn't clash with the centred mode switcher */}
       <header className="pointer-events-none absolute left-0 top-0 pt-safe pl-safe p-3 sm:p-5">
         <h1 className="text-sm font-bold tracking-tight sm:text-xl">Country Knowledge</h1>
-        <p className="hidden text-sm text-slate-400 sm:block">
-          {mode === "explore"
-            ? "Click a country for its flag, capital & state borders"
-            : "Test yourself with a 10-question round"}
-        </p>
+        <p className="hidden text-sm text-slate-400 sm:block">{HEADER_SUBTITLE[mode]}</p>
       </header>
 
       {/* Mode switcher — pushed down on mobile so it clears the status bar */}

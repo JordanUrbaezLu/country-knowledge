@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import type { Country } from "../data/types";
 import { isCorrectName } from "./matching";
-import { generateRound, type Question } from "./questions";
+import { generateRound, type Difficulty, type Question } from "./questions";
 
 export type GameStatus = "idle" | "playing" | "feedback" | "done";
 
@@ -13,6 +13,7 @@ export interface AnswerRecord {
 
 interface GameState {
   status: GameStatus;
+  difficulty: Difficulty;
   questions: Question[];
   index: number;
   score: number;
@@ -20,7 +21,8 @@ interface GameState {
   lastGiven: string;
   records: AnswerRecord[];
   best: number;
-  start: (countries: Country[]) => void;
+  setDifficulty: (d: Difficulty) => void;
+  start: (countries: Country[], difficulty?: Difficulty) => void;
   answerTyped: (input: string) => void;
   answerClick: (country: Country) => void;
   next: () => void;
@@ -36,6 +38,7 @@ const loadBest = (): number => {
 
 export const useGame = create<GameState>((set, get) => ({
   status: "idle",
+  difficulty: "medium",
   questions: [],
   index: 0,
   score: 0,
@@ -44,15 +47,21 @@ export const useGame = create<GameState>((set, get) => ({
   records: [],
   best: loadBest(),
 
-  start: (countries) =>
-    set({
-      status: "playing",
-      questions: generateRound(countries, 10),
-      index: 0,
-      score: 0,
-      lastCorrect: null,
-      lastGiven: "",
-      records: [],
+  setDifficulty: (d) => set({ difficulty: d }),
+
+  start: (countries, difficulty) =>
+    set((s) => {
+      const diff = difficulty ?? s.difficulty;
+      return {
+        status: "playing",
+        difficulty: diff,
+        questions: generateRound(countries, 10, diff),
+        index: 0,
+        score: 0,
+        lastCorrect: null,
+        lastGiven: "",
+        records: [],
+      };
     }),
 
   answerTyped: (input) => {
