@@ -5,21 +5,26 @@
 **Vite SPA** (NOT Next.js), deployed on **Vercel**. Desktop-first, mobile-supported.
 
 ## Hard-won facts — do not re-learn
-- **Vercel cannot host the realtime server** (serverless, no persistent WebSockets). Multiplayer
-  runs on **PartyKit** (`party/server.ts`), deployed separately (`npm run party:deploy`). The
-  Vercel frontend talks to it via `VITE_PARTYKIT_HOST` (dev default `127.0.0.1:1999`).
-- The **PartyKit room is authoritative** for clock/scoring/round progression and is **dataset-free**:
-  the host's browser generates the question `sequence` (countryId+mode+duration) and sends it in
-  `start`. Clients map countryId → their local `Country` to render; they report only
-  `{correct, pickedLabel, pickedCountryId}`. Scoring uses the **server** clock (fair across latency).
-- **Identity = a localStorage uuid** (`ck.mp.id`) passed as the PartySocket `id`. This is what lets a
-  disconnect/refresh/tab-close **rejoin the same player and keep score + color**. Never move it to
-  sessionStorage (breaks rejoin on tab close).
+- **No cloud server.** Multiplayer is a **self-hosted Node server** (`server/index.ts`, `ws` + `sirv`,
+  run via `tsx`) that the user runs on their own machine when they want to play. It serves the built
+  SPA **and** the WebSocket on **one port** (default 1999), so the client connects **same-origin** —
+  no env var needed in prod. Family joins a public link from a **tunnel** (`npm run share` → untun, or
+  `cloudflared tunnel --url http://localhost:1999`). HTTP+WS through cloudflared is verified end-to-end.
+  (We pivoted OFF PartyKit: its shared `partykit.dev` zone hit Cloudflare's 10k-custom-domain cap, a
+  hard platform block. Vercel can't host the WS server either, hence self-host.)
+- The **server is authoritative** for clock/scoring/round progression and is **dataset-free**: the
+  host's browser generates the question `sequence` (countryId+mode+duration) and sends it in `start`.
+  Clients map countryId → their local `Country`; they report only `{correct, pickedLabel,
+  pickedCountryId}`. Scoring uses the **server** clock (fair across latency).
+- **Identity = a localStorage uuid** (`ck.mp.id`) sent as the `id` query param in the WS URL
+  (`/ws?room=CODE&id=UUID`) via partysocket's reconnecting `WebSocket`. The server keys players by it,
+  so disconnect/refresh/tab-close **rejoins the same player and keeps score + color**. Never move it
+  to sessionStorage. `VITE_WS_HOST` overrides the same-origin default (dev/cross-origin only).
 - Core game rules live in a **pure, transport-agnostic engine** `src/multiplayer/roomGame.ts`
   (injected `RoomIO`: now/send/broadcast/scheduleTimer/clearTimer, **one** active timer). This is the
-  unit-tested surface; `party/server.ts` is a thin adapter. Keep logic in the engine.
-- `party/` is **excluded from the main tsconfig** (DOM-vs-Worker globals clash). Typecheck it
-  separately: `npm run typecheck:party` (uses `party/tsconfig.json`).
+  unit-tested surface; `server/index.ts` is a thin adapter (same-id reconnect = "last socket wins").
+- `server/` is **not in the main tsconfig**. Typecheck it separately: `npm run typecheck:server`
+  (`server/tsconfig.json`, node types).
 - Player colors: `PLAYER_COLORS` (src/multiplayer/colors.ts) length **must equal `COLOR_SLOTS`** (10)
   in protocol.ts. Server assigns the lowest slot not held by a *connected* player (reuses ghosts).
 - Reveal map: `GlobeView` takes `highlights: Record<id,color>` (answer gold + each guess in its
@@ -36,18 +41,18 @@
 - `src/game/store.ts` / `game/GameView.tsx` — solo zustand store + UI (difficulty-aware).
 - `src/multiplayer/protocol.ts` — wire types, `scorePoints`, `REVEAL_MS`, `COLOR_SLOTS` (shared client+server).
 - `src/multiplayer/roomGame.ts` — **authoritative engine** (state machine, scoring, host handoff, rejoin).
-- `party/server.ts` — PartyKit adapter (setTimeout/Date.now → RoomIO).
+- `server/index.ts` — self-hosted Node adapter (http+sirv serves dist, `ws` for `/ws`, RoomIO via setTimeout/Date.now).
 - `src/multiplayer/useRoom.ts` — client store (PartySocket, message handling, phase, reconnect).
 - `src/multiplayer/MultiplayerView.tsx` — orchestrator: one persistent globe + phase overlays + reveal lighting.
 - `src/multiplayer/{JoinScreen,Lobby,RoundHud,Reveal,GameOver,Timer,ui,colors,resolveGuess}` — screens + helpers.
 - `src/globe/GlobeView.tsx` — globe (highlights / markers / focusAltitude).
 
 ## Commands
-- `npm run dev:mp` — Vite + PartyKit together (local multiplayer). `npm run dev` = Vite only.
-- `npm run build` — typecheck (SPA) + prod build. `npm run typecheck:party` — worker typecheck.
-- `npm run test` — unit tests. `npm run check` — build + party typecheck + tests.
-- `node scripts/mp-e2e.mjs` — **live e2e**: spins up PartyKit+Vite, plays a full 2-player game incl. reconnect + rematch.
-- `npm run party:deploy` — deploy the PartyKit room. Set `VITE_PARTYKIT_HOST` in Vercel to the printed host.
+- `npm run play` — host a game (build + serve app + multiplayer on :1999). `npm run share` — same + public tunnel link.
+- `npm run dev:mp` — Vite + server together (hot reload) for dev. `npm run dev` = Vite only.
+- `npm run build` — typecheck (SPA) + prod build. `npm run typecheck:server` — server typecheck.
+- `npm run test` — unit tests. `npm run check` — build + server typecheck + tests.
+- `node scripts/mp-e2e.mjs` — **live e2e**: spins up the server + Vite, plays a full 2-player game incl. reconnect + rematch.
 
 ## Verification bar for changes
 `npm run check` green **and** `node scripts/mp-e2e.mjs` green (exit 0). For multiplayer/visual changes,

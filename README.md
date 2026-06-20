@@ -42,25 +42,41 @@ Switch to **Family** to play together in real time — inspired by GeoGuessr, bu
   game and keep your score and color** (identity is a `localStorage` id). The game keeps running if
   the host closes their tab (host role hands off automatically).
 
-**Architecture.** The app stays a static Vite SPA (deploy it on Vercel as today). The realtime backend
-is a tiny **PartyKit** room (`party/server.ts`) that owns the clock, scoring and round progression —
-Vercel can't host a persistent WebSocket server, so this runs separately (free). The PartyKit room is
-*dataset-free*: the host's browser generates the question sequence and the server just coordinates.
-See [AGENTS.md](AGENTS.md) for the full design.
+**Architecture.** There's no cloud server to run or pay for. A small **self-hosted Node server**
+(`server/index.ts`) serves the built app *and* hosts the realtime game over WebSockets on one port —
+you run it on your computer whenever you want to play. It owns the clock, scoring and round
+progression; it's *dataset-free* (the host's browser generates the question sequence) and keeps
+nothing on disk. All the game rules live in a transport-agnostic engine (`src/multiplayer/roomGame.ts`).
+See [AGENTS.md](AGENTS.md) for the design.
+
+### Playing with family (you host, they join the link)
+
+Your computer runs the game; family open a link on their phones. Two cases:
+
+**Same Wi-Fi (everyone in the house):**
 
 ```bash
-npm run dev:mp     # Vite + PartyKit together, then open http://localhost:5173 → "Family"
+npm run play        # builds + starts the server on :1999, prints a "Same Wi-Fi" URL
 ```
 
-### Deploying multiplayer
+Share the `http://192.168.x.x:1999` URL it prints; everyone opens it → **Family** → create a room.
 
-1. **Deploy the room:** `npm run party:deploy` (first run: `npx partykit login`). It prints a host like
-   `country-knowledge.<your-username>.partykit.dev`.
-2. **Point the frontend at it:** set `VITE_PARTYKIT_HOST` to that host in your Vercel project env, then
-   redeploy. (Locally it defaults to `127.0.0.1:1999`; see `.env.example`.)
+**Family on cellular / different networks (most common):** you need a public link via a tunnel.
 
-That's it — your existing Vercel URL now hosts the game; share links just work. For an ad-hoc game
-night without deploying, run `npm run dev:mp` and expose `:5173` with a tunnel (e.g. `cloudflared`).
+```bash
+npm run share       # builds, starts the server, AND opens a public tunnel — prints an https URL
+```
+
+Share the printed `https://….trycloudflare.com` link. They open it on their phones (cellular is fine),
+pick **Family**, and play. Keep that terminal open while you play; `Ctrl-C` ends it.
+
+> `npm run share` uses [`untun`](https://github.com/unjs/untun) (no install, no account). Equivalent
+> rock-solid manual route: `npm run play` in one terminal, then
+> `cloudflared tunnel --url http://localhost:1999` (`brew install cloudflared`) in another — both HTTP
+> and WebSocket are proxied, verified end-to-end.
+
+For local development (hot reload), `npm run dev:mp` runs Vite + the server together at
+`http://localhost:5173`.
 
 ## Tech stack
 
@@ -74,7 +90,7 @@ night without deploying, run `npm run dev:mp` and expose `:5173` with a tunnel (
 | Country metadata | [`world-countries`](https://www.npmjs.com/package/world-countries) (names, capitals, ISO codes) |
 | Flags | SVGs vendored from `world-countries` into `public/flags/` by `scripts/build-flags.mjs` (no CDN dependency) |
 | Game state | Zustand |
-| Multiplayer | [PartyKit](https://partykit.io) (authoritative room) + [`partysocket`](https://www.npmjs.com/package/partysocket) client |
+| Multiplayer | Self-hosted Node server (`ws` + `sirv`, run via `tsx`) over a transport-agnostic engine; [`partysocket`](https://www.npmjs.com/package/partysocket) reconnecting client; public link via a tunnel |
 | Styling | Tailwind CSS v4 |
 | Tests | Vitest (unit) + Playwright (`scripts/mp-e2e.mjs` live multiplayer e2e) |
 
@@ -84,19 +100,20 @@ Requires **Node ≥ 20.19** (Vite 8).
 
 ```bash
 npm install
+npm run play         # ⭐ host a game: build + serve app + multiplayer on :1999
+npm run share        # ⭐ same, but also opens a public tunnel link (family on cellular)
 npm run dev          # Vite only — Explore + Solo (http://localhost:5173)
-npm run dev:mp       # Vite + PartyKit together — needed for Family mode
+npm run dev:mp       # Vite + game server together (hot reload) for development
 npm run build        # typecheck + production build (the SPA)
-npm run typecheck:party  # typecheck the PartyKit worker (separate tsconfig)
+npm run typecheck:server # typecheck the Node server (separate tsconfig)
 npm run test         # unit tests (data, matching, scoring, room state machine, difficulty)
-npm run check        # build + party typecheck + tests
-node scripts/mp-e2e.mjs  # live end-to-end: spins up PartyKit+Vite, plays a full 2-player game
+npm run check        # build + server typecheck + tests
+node scripts/mp-e2e.mjs  # live end-to-end: spins up the server + Vite, plays a full 2-player game
 ```
 
-To try it on a phone, run `npm run dev:mp -- --host` (or `npm run dev -- --host`) and open the LAN
-URL it prints. With the dev server running, `node scripts/mobile-verify.mjs <url>` drives the full
-mobile (emulated iPhone) + desktop flows end-to-end with Playwright, and
-`node scripts/ui-tour.mjs <url>` captures screenshots of every screen to `/tmp/`.
+With a dev server running, `node scripts/mobile-verify.mjs <url>` drives the full mobile (emulated
+iPhone) + desktop flows end-to-end with Playwright, and `node scripts/ui-tour.mjs <url>` captures
+screenshots of every screen to `/tmp/`.
 
 ## Data notes
 

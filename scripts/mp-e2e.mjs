@@ -15,7 +15,7 @@ import net from "node:net";
 import { chromium } from "playwright";
 
 const VITE_PORT = 5174;
-const PARTY_PORT = 1999;
+const WS_PORT = 1999;
 const BASE = `http://localhost:${VITE_PORT}`;
 const children = [];
 let failed = false;
@@ -55,8 +55,8 @@ async function waitPort(port, timeoutMs = 90000) {
   }
 }
 
-function spawnProc(cmd, args, name) {
-  const p = spawn(cmd, args, { stdio: "pipe", env: { ...process.env } });
+function spawnProc(cmd, args, name, env = {}) {
+  const p = spawn(cmd, args, { stdio: "pipe", env: { ...process.env, ...env } });
   children.push(p);
   p.stdout.on("data", (d) => process.env.E2E_VERBOSE && process.stdout.write(`[${name}] ${d}`));
   p.stderr.on("data", (d) => process.env.E2E_VERBOSE && process.stdout.write(`[${name}!] ${d}`));
@@ -143,10 +143,12 @@ async function scoreOf(page, name) {
 }
 
 async function main() {
-  log("starting partykit dev + vite…");
-  spawnProc("npx", ["partykit", "dev", "--port", String(PARTY_PORT)], "party");
-  spawnProc("npx", ["vite", "--port", String(VITE_PORT), "--strictPort"], "vite");
-  await waitPort(PARTY_PORT);
+  log("starting ws server + vite…");
+  spawnProc("npx", ["tsx", "server/index.ts"], "ws", { PORT: String(WS_PORT) });
+  spawnProc("npx", ["vite", "--port", String(VITE_PORT), "--strictPort"], "vite", {
+    VITE_WS_HOST: `127.0.0.1:${WS_PORT}`,
+  });
+  await waitPort(WS_PORT);
   await waitPort(VITE_PORT);
   log("both servers up");
 

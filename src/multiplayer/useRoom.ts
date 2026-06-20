@@ -1,4 +1,4 @@
-import PartySocket from "partysocket";
+import { WebSocket as ReconnectingWebSocket } from "partysocket";
 import { create } from "zustand";
 import type { Country } from "../data/types";
 import { MODE_DURATION_MS, generateRound, type Difficulty } from "../game/questions";
@@ -14,8 +14,24 @@ import {
   type ServerMsg,
 } from "./protocol";
 
-const PARTY_HOST: string =
-  (import.meta.env.VITE_PARTYKIT_HOST as string | undefined) || "127.0.0.1:1999";
+/**
+ * Where the realtime server lives. In production the same Node server serves the
+ * SPA, so the WebSocket is same-origin (no config). For dev (Vite on a different
+ * port) or a separately-hosted server, set VITE_WS_HOST (e.g. 127.0.0.1:1999 or
+ * your-app.onrender.com).
+ */
+const WS_HOST: string | undefined = import.meta.env.VITE_WS_HOST as string | undefined;
+
+function wsUrl(code: string, id: string): string {
+  const q = `room=${encodeURIComponent(code)}&id=${encodeURIComponent(id)}`;
+  if (WS_HOST) {
+    const insecure = /^(localhost|127\.|0\.0\.0\.0|\[?::1|192\.168\.|10\.)/.test(WS_HOST);
+    return `${insecure ? "ws" : "wss"}://${WS_HOST}/ws?${q}`;
+  }
+  const proto = typeof location !== "undefined" && location.protocol === "https:" ? "wss" : "ws";
+  const host = typeof location !== "undefined" ? location.host : "127.0.0.1:1999";
+  return `${proto}://${host}/ws?${q}`;
+}
 
 const ID_KEY = "ck.mp.id";
 const NAME_KEY = "ck.mp.name";
@@ -104,7 +120,7 @@ interface RoomState {
 }
 
 // The socket lives outside the store (non-reactive, single instance).
-let socket: PartySocket | null = null;
+let socket: ReconnectingWebSocket | null = null;
 
 function buildSequence(countries: Country[], difficulty: Difficulty): SeqItem[] {
   return generateRound(countries, TOTAL_ROUNDS, difficulty).map((q) => ({
@@ -197,7 +213,7 @@ export const useRoom = create<RoomState>((set, get) => {
       answeredThisRound: false,
     });
 
-    socket = new PartySocket({ host: PARTY_HOST, room: code, id: myId });
+    socket = new ReconnectingWebSocket(wsUrl(code, myId));
     socket.addEventListener("open", () => {
       // (re-)register on first connect and on every auto-reconnect
       send({ t: "join", name: get().name });
