@@ -8,8 +8,9 @@
 - **No cloud server.** Multiplayer is a **self-hosted Node server** (`server/index.ts`, `ws` + `sirv`,
   run via `tsx`) that the user runs on their own machine when they want to play. It serves the built
   SPA **and** the WebSocket on **one port** (default 1999), so the client connects **same-origin** —
-  no env var needed in prod. Family joins a public link from a **tunnel** (`npm run share` → untun, or
-  `cloudflared tunnel --url http://localhost:1999`). HTTP+WS through cloudflared is verified end-to-end.
+  no env var needed in prod. Family joins a public link from a **tunnel**: `npm run share`
+  (`scripts/share.mjs` starts the server + a Cloudflare quick tunnel via the `cloudflared` npm package;
+  waits for the `connected` event before printing the link). HTTP+WS through it verified end-to-end.
   (We pivoted OFF PartyKit: its shared `partykit.dev` zone hit Cloudflare's 10k-custom-domain cap, a
   hard platform block. Vercel can't host the WS server either, hence self-host.)
 - The **server is authoritative** for clock/scoring/round progression and is **dataset-free**: the

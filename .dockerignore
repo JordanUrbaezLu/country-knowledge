@@ -1,0 +1,7 @@
+node_modules
+dist
+.git
+.partykit
+.vite
+*.log
+.DS_Store

@@ -7,7 +7,7 @@
     "dev": "vite",
     "dev:mp": "concurrently -k -n web,ws -c cyan,magenta \"VITE_WS_HOST=127.0.0.1:1999 vite\" \"tsx watch server/index.ts\"",
     "play": "npm run build && npm start",
-    "share": "npm run build && concurrently -k -n server,tunnel -c green,cyan \"npm start\" \"npx -y untun@latest tunnel http://localhost:1999\"",
+    "share": "npm run build && node scripts/share.mjs",
     "server": "tsx server/index.ts",
     "start": "tsx server/index.ts",
     "build": "tsc --noEmit && vite build",
@@ -29,6 +29,9 @@
     "world-countries": "^5.1.0",
     "ws": "^8.21.0",
     "zustand": "^5.0.14"
+  },
+  "optionalDependencies": {
+    "cloudflared": "^0.7.1"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.0",

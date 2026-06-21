@@ -1,0 +1,23 @@
+# One-click deploy to Render as an always-on public server.
+# Render → New → Blueprint → connect this repo → Apply.
+#
+# Notes:
+# - The single Node service serves the built app AND the realtime WebSocket on
+#   one URL. No env vars needed (the client connects same-origin).
+# - Rooms are in-memory, so keep this at ONE instance (don't enable scaling); a
+#   restart just ends any in-progress games.
+# - "plan: free" sleeps after ~15 min idle (first visitor then waits ~50s).
+#   Change to "starter" for always-on, no cold starts (recommended for a public
+#   GeoGuessr-style site).
+services:
+  - type: web
+    name: country-knowledge
+    runtime: node
+    plan: free
+    region: oregon
+    buildCommand: npm ci --include=dev --omit=optional && npm run build
+    startCommand: npm start
+    healthCheckPath: /healthz
+    envVars:
+      - key: NODE_VERSION
+        value: "22.22.3"
