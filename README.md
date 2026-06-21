@@ -77,6 +77,29 @@ pick **Family**, and play. Keep that terminal open while you play; `Ctrl-C` ends
 For local development (hot reload), `npm run dev:mp` runs Vite + the server together at
 `http://localhost:5173`.
 
+### Deploy as an always-on public site (anyone can play)
+
+The same server (`server/index.ts`) deploys to any always-on host — it serves the app **and** the
+WebSocket on one URL, so there's nothing extra to configure (the client connects same-origin).
+
+**Render (one click)** — a [`render.yaml`](render.yaml) blueprint is included:
+
+1. Push this repo to GitHub (done).
+2. [Render](https://render.com) → **New** → **Blueprint** → connect the repo → **Apply**.
+3. Open the `https://<your-app>.onrender.com` URL. Done — share it with anyone.
+
+The free plan sleeps after ~15 min idle (first visitor then waits ~50s); switch the plan to **Starter**
+($7/mo) for always-on, no cold starts — recommended for a public, GeoGuessr-style site.
+
+**Railway / Fly.io / any container host** — use the included [`Dockerfile`](Dockerfile):
+
+- Railway: New Project → Deploy from GitHub → it builds the Dockerfile. No cold starts.
+- Fly.io: `fly launch` (reads the Dockerfile) → `fly deploy`.
+
+> **Keep it to one instance.** Rooms live in memory, so the app must run as a single instance (don't
+> enable autoscaling). A restart simply ends any in-progress games — fine for casual play. (Sharding
+> across instances would need shared state, e.g. Redis — out of scope for now.)
+
 ## Tech stack
 
 | Concern | Choice |

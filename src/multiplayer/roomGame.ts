@@ -54,7 +54,8 @@ const MAX_SEQUENCE = 50;
 
 export class RoomGame {
   players = new Map<string, Player>();
-  hostId: string | null = null;
+  /** The room creator. Host privileges always belong to them while connected. */
+  ownerId: string | null = null;
   status: RoomStatus = "lobby";
   difficulty: Difficulty | null = null;
   sequence: SeqItem[] = [];
@@ -65,6 +66,19 @@ export class RoomGame {
     readonly code: string,
     private readonly io: RoomIO,
   ) {}
+
+  /**
+   * Who currently holds host controls. Computed LIVE (not stored) so a temporary
+   * blip in the creator's connection can't permanently hand the room to someone
+   * else: the owner reclaims host the instant they reconnect. Falls back to the
+   * first connected player only while the owner is away, so the game can still
+   * be driven.
+   */
+  get hostId(): string | null {
+    if (this.ownerId && this.players.get(this.ownerId)?.connected) return this.ownerId;
+    for (const p of this.players.values()) if (p.connected) return p.id;
+    return null;
+  }
 
   // ---- connection lifecycle ----
 
@@ -78,8 +92,8 @@ export class RoomGame {
     if (!p) return;
     p.connected = false;
 
-    if (this.hostId === connId) this.reassignHost();
-
+    // host is derived live (see `hostId`), so nothing to reassign here — if the
+    // owner just left, controls fall to a connected player until they're back.
     this.broadcastState();
     // Don't stall a round on someone who just left mid-question.
     this.maybeEndQuestionEarly();
@@ -108,7 +122,7 @@ export class RoomGame {
         elapsedMs: null,
       });
     }
-    if (!this.hostId) this.hostId = connId;
+    if (!this.ownerId) this.ownerId = connId;
 
     this.broadcastState();
     this.catchUp(connId);
@@ -225,11 +239,6 @@ export class RoomGame {
     } else if (this.status === "gameover") {
       this.io.send(connId, { t: "gameover", leaderboard: this.leaderboard() });
     }
-  }
-
-  private reassignHost() {
-    const next = [...this.players.values()].find((q) => q.connected);
-    this.hostId = next ? next.id : null;
   }
 
   private questionMessage(): ServerMsg {

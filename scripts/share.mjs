@@ -9,7 +9,16 @@
 import { spawn } from "node:child_process";
 import net from "node:net";
 import { existsSync } from "node:fs";
-import { bin, install, Tunnel } from "cloudflared";
+
+// cloudflared is an optionalDependency (skipped on cloud builds that don't need
+// it). For local `npm run share` a normal `npm install` includes it.
+let bin, install, Tunnel;
+try {
+  ({ bin, install, Tunnel } = await import("cloudflared"));
+} catch {
+  console.error("\n❌  The tunnel tool isn't installed. Run:  npm install\n");
+  process.exit(1);
+}
 
 const PORT = Number(process.env.PORT) || 1999;
 let server = null;

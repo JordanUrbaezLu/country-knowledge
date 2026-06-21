@@ -127,6 +127,34 @@ describe("RoomGame — host controls", () => {
     expect(game.status).toBe("question");
   });
 
+  it("returns host to the creator after a connection blip — a late joiner can't steal it", () => {
+    const { game } = setup();
+    game.join("owner", "Ann"); // creator
+    game.join("friend", "Bob");
+    expect(game.hostId).toBe("owner");
+
+    game.onClose("owner"); // owner's socket blips
+    expect(game.hostId).toBe("friend"); // temp host so the game can still be driven
+
+    game.join("late", "Cy"); // a newcomer does NOT become host
+    expect(game.hostId).toBe("friend");
+
+    game.join("owner", "Ann"); // owner reconnects → reclaims host
+    expect(game.hostId).toBe("owner");
+  });
+
+  it("owner reclaims host even after being briefly the only (disconnected) player", () => {
+    // exact reported bug: creator alone in lobby drops, a friend joins and grabs host
+    const { game } = setup();
+    game.join("owner", "Ann");
+    game.onClose("owner");
+    expect(game.hostId).toBeNull();
+    game.join("friend", "Bob"); // friend is temp host while owner away
+    expect(game.hostId).toBe("friend");
+    game.join("owner", "Ann"); // owner returns → host comes back to them
+    expect(game.hostId).toBe("owner");
+  });
+
   it("ignores a stale skip whose phase/round no longer matches (no accidental skip)", () => {
     const { io, game } = setup();
     game.join("a", "Ann");
