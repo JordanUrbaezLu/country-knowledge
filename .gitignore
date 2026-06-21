@@ -5,8 +5,6 @@ dist-ssr
 .DS_Store
 .vite
 
-# PartyKit local dev cache + local env
-.partykit
 .env
 .env.*.local
 

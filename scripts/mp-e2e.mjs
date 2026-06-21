@@ -1,5 +1,5 @@
 /**
- * End-to-end multiplayer test against a LIVE PartyKit server + Vite dev server.
+ * End-to-end multiplayer test against the LIVE game server + Vite dev server.
  * Spins up both, drives two browser players through a full game, and verifies:
  *   - create room + join via share link, lobby shows both players
  *   - start, answer (typed rounds answered correctly via a dev target hook),
@@ -47,7 +47,7 @@ function tryConnect(port, host) {
 
 async function waitPort(port, timeoutMs = 90000) {
   const start = Date.now();
-  // vite binds localhost (often IPv6 ::1); partykit binds 0.0.0.0 — try both
+  // vite binds localhost (often IPv6 ::1); the game server binds 0.0.0.0 — try both
   for (;;) {
     if ((await tryConnect(port, "127.0.0.1")) || (await tryConnect(port, "::1"))) return;
     if (Date.now() - start > timeoutMs) throw new Error(`port ${port} not up`);
@@ -167,8 +167,8 @@ async function main() {
 
   // --- Host creates a room ---
   await host.goto(BASE, { waitUntil: "load" });
-  await host.getByRole("button", { name: "Family" }).click();
-  await host.getByPlaceholder("e.g. Dad").fill("Ann");
+  await host.getByRole("button", { name: "Online" }).click();
+  await host.getByPlaceholder("e.g. John").fill("Ann");
   await host.getByRole("button", { name: "Create a room" }).click();
   await waitPhase(host, "lobby");
   const code = (await host.getByTestId("room-code").textContent())?.trim();
@@ -176,7 +176,7 @@ async function main() {
 
   // --- Player joins via the share link ---
   await player.goto(`${BASE}/?room=${code}`, { waitUntil: "load" });
-  await player.getByPlaceholder("e.g. Dad").fill("Bob");
+  await player.getByPlaceholder("e.g. John").fill("Bob");
   await player.getByRole("button", { name: "Join room" }).click();
   await waitPhase(player, "lobby");
   log("player joined");
@@ -261,7 +261,7 @@ async function main() {
         scoreBeforeReload = (await scoreOf(host, "Bob")) ?? 0;
         log(`reconnect test: Bob score before reload = ${scoreBeforeReload}`);
         await player.reload({ waitUntil: "load" });
-        await player.getByPlaceholder("e.g. Dad").fill("Bob");
+        await player.getByPlaceholder("e.g. John").fill("Bob");
         // we arrived via ?room so the Join button is present
         await player.getByRole("button", { name: "Join room" }).click();
         await player.waitForTimeout(1200); // settle reconnect + catch-up

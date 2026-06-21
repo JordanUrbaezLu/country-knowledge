@@ -466,7 +466,7 @@ export default function GlobeView({
           polygonStrokeColor={strokeColor}
           polygonAltitude={altitude}
           polygonLabel={label}
-          polygonsTransitionDuration={crosshair ? 0 : 300}
+          polygonsTransitionDuration={crosshair || (stateFeatures && stateFeatures.length) ? 0 : 300}
           onPolygonClick={handleClick}
           onPolygonHover={handleHover}
           htmlElementsData={markers ?? []}

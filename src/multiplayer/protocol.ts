@@ -1,6 +1,6 @@
 /**
  * Wire protocol shared by the browser client (`src/multiplayer/*`) and the
- * authoritative PartyKit room (`party/server.ts`). Keep this transport-agnostic:
+ * authoritative game server (`server/index.ts`). Keep this transport-agnostic:
  * plain data + pure functions only, so both sides import one source of truth.
  */
 import type { Difficulty, QuestionMode } from "../game/questions";

@@ -1,10 +1,10 @@
 /**
  * Pure, transport-agnostic multiplayer game engine. Holds ALL room state and
  * rules (players, scoring, round progression, host hand-off, rejoin) with zero
- * dependency on PartyKit or the network — every side effect goes through the
+ * dependency on the network/transport — every side effect goes through the
  * injected `RoomIO`, and the clock + timer are injected too. That makes the
  * whole state machine deterministically unit-testable (see roomGame.test.ts),
- * and keeps `party/server.ts` a thin adapter.
+ * and keeps `server/index.ts` a thin adapter.
  *
  * It is deliberately dataset-free: the host's browser generates the question
  * `sequence` (countryId + mode + duration) and ships it in `start`, so the
@@ -81,6 +81,11 @@ export class RoomGame {
   }
 
   // ---- connection lifecycle ----
+
+  /** Stop any pending round timer (called when the host GCs an empty room). */
+  dispose() {
+    this.io.clearTimer();
+  }
 
   /** A socket connected but hasn't joined with a name yet — just catch it up. */
   onConnect(connId: string) {

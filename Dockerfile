@@ -4,10 +4,12 @@ FROM node:22-slim
 
 WORKDIR /app
 
-# Install deps (include dev for the build; skip the optional cloudflared tunnel
-# tool, which is only used by the local `npm run share`).
+# Install deps (include dev for the build). Keep optional deps: Vite 8's bundler
+# (rolldown) ships its platform binding as an optionalDependency, so omitting
+# optional breaks the build. (The optional cloudflared tunnel tool also installs
+# here but is unused by the server — harmless.)
 COPY package*.json ./
-RUN npm ci --include=dev --omit=optional
+RUN npm ci --include=dev
 
 # Build the SPA, then run the server (tsx runs the TS entry directly).
 COPY . .
