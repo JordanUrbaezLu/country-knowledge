@@ -9,16 +9,74 @@ world, then test yourself with a 10-question quiz.
   scroll/pinch to zoom, and **two-finger trackpad swipe to spin**.
 - **Explore mode** — click any country to see its flag, capital, region, and ISO code, and to
   outline its **state/province borders** on the globe (one country at a time).
-- **Play mode** — a 10-question round mixing three challenge types:
+- **Solo mode** — a 10-question round mixing three challenge types:
   1. 🟠 **Locate → name** — a country lights up; type its name (typo-tolerant).
   2. 🏳️ **Flag → identify** — name the country from its flag.
   3. 🌍 **Name → find** — click the named country on the globe.
   Running score, typo tolerance, and a best-score saved to `localStorage`.
+- **Difficulty** — **Easy / Medium / Hard**, applied to both Solo and Family. Difficulty changes the
+  pool of countries by "fame" (a population + GDP blend): Easy draws from the ~50 most prominent
+  nations, Medium ~120, Hard the whole world including obscure micro-states.
+- **Family mode (online multiplayer)** — GeoGuessr-style. Create a room, share the link, everyone
+  enters a name, and you compete in real time. See the next section.
 - **Mobile crosshair** — on touch devices a centre-screen reticle continuously names whatever
   country (or state, once one is selected) sits beneath it; tapping the pill selects it, the
   same as a click. The name→find quiz question uses the reticle too: aim, then tap
   **Select this country** (names stay hidden). Selecting a country focuses it under the
   reticle, and the quiz input lifts above the iOS keyboard.
+
+## Multiplayer (Family mode)
+
+Switch to **Family** to play together in real time — inspired by GeoGuessr, but country-based.
+
+- **Create a room** → get a short, say-out-loud code (no `0/O/1/I`) and a **share link**. Anyone who
+  opens the link types a name and they're in — no sign-up, no accounts.
+- **Each round has a timer** and a **speed bonus**: a correct answer scores from ~1000 (instant) down
+  to a 100 floor at the buzzer; wrong/no-answer scores 0. The round ends as soon as everyone has
+  answered, so there's no dead waiting.
+- **The reveal is the payoff.** The globe flies to the answer (glowing **gold**) and **every player's
+  guess lights up in their own color** with their name floating on it — typed guesses are resolved
+  back to a country so they light up too. You can literally see who was a country (or a continent)
+  off. A results strip shows each pick, ✓/✗, points and time, then the running leaderboard.
+- **Reliable for family on phones.** Lock your screen, lose Wi-Fi, or refresh — you **rejoin the same
+  game and keep your score and color** (identity is a `localStorage` id). The game keeps running if
+  the host closes their tab (host role hands off automatically).
+
+**Architecture.** There's no cloud server to run or pay for. A small **self-hosted Node server**
+(`server/index.ts`) serves the built app *and* hosts the realtime game over WebSockets on one port —
+you run it on your computer whenever you want to play. It owns the clock, scoring and round
+progression; it's *dataset-free* (the host's browser generates the question sequence) and keeps
+nothing on disk. All the game rules live in a transport-agnostic engine (`src/multiplayer/roomGame.ts`).
+See [AGENTS.md](AGENTS.md) for the design.
+
+### Playing with family (you host, they join the link)
+
+Your computer runs the game; family open a link on their phones. Two cases:
+
+**Same Wi-Fi (everyone in the house):**
+
+```bash
+npm run play        # builds + starts the server on :1999, prints a "Same Wi-Fi" URL
+```
+
+Share the `http://192.168.x.x:1999` URL it prints; everyone opens it → **Family** → create a room.
+
+**Family on cellular / different networks (most common):** you need a public link via a tunnel.
+
+```bash
+npm run share       # builds, starts the server, AND opens a public tunnel — prints an https URL
+```
+
+Share the printed `https://….trycloudflare.com` link. They open it on their phones (cellular is fine),
+pick **Family**, and play. Keep that terminal open while you play; `Ctrl-C` ends it.
+
+> `npm run share` uses [`untun`](https://github.com/unjs/untun) (no install, no account). Equivalent
+> rock-solid manual route: `npm run play` in one terminal, then
+> `cloudflared tunnel --url http://localhost:1999` (`brew install cloudflared`) in another — both HTTP
+> and WebSocket are proxied, verified end-to-end.
+
+For local development (hot reload), `npm run dev:mp` runs Vite + the server together at
+`http://localhost:5173`.
 
 ## Tech stack
 
@@ -32,8 +90,9 @@ world, then test yourself with a 10-question quiz.
 | Country metadata | [`world-countries`](https://www.npmjs.com/package/world-countries) (names, capitals, ISO codes) |
 | Flags | SVGs vendored from `world-countries` into `public/flags/` by `scripts/build-flags.mjs` (no CDN dependency) |
 | Game state | Zustand |
+| Multiplayer | Self-hosted Node server (`ws` + `sirv`, run via `tsx`) over a transport-agnostic engine; [`partysocket`](https://www.npmjs.com/package/partysocket) reconnecting client; public link via a tunnel |
 | Styling | Tailwind CSS v4 |
-| Tests | Vitest |
+| Tests | Vitest (unit) + Playwright (`scripts/mp-e2e.mjs` live multiplayer e2e) |
 
 ## Getting started
 
@@ -41,16 +100,20 @@ Requires **Node ≥ 20.19** (Vite 8).
 
 ```bash
 npm install
-npm run dev       # start the dev server (http://localhost:5173)
-npm run build     # typecheck + production build
-npm run preview   # serve the production build
-npm run test      # run the unit tests (data normalization + answer matching)
+npm run play         # ⭐ host a game: build + serve app + multiplayer on :1999
+npm run share        # ⭐ same, but also opens a public tunnel link (family on cellular)
+npm run dev          # Vite only — Explore + Solo (http://localhost:5173)
+npm run dev:mp       # Vite + game server together (hot reload) for development
+npm run build        # typecheck + production build (the SPA)
+npm run typecheck:server # typecheck the Node server (separate tsconfig)
+npm run test         # unit tests (data, matching, scoring, room state machine, difficulty)
+npm run check        # build + server typecheck + tests
+node scripts/mp-e2e.mjs  # live end-to-end: spins up the server + Vite, plays a full 2-player game
 ```
 
-To try it on a phone, run `npm run dev -- --host` and open the LAN URL it prints.
-With the dev server running, `node scripts/mobile-verify.mjs <url>` drives the full
-mobile (emulated iPhone) + desktop flows end-to-end with Playwright, and
-`node scripts/ui-tour.mjs <url>` captures screenshots of every screen to `/tmp/`.
+With a dev server running, `node scripts/mobile-verify.mjs <url>` drives the full mobile (emulated
+iPhone) + desktop flows end-to-end with Playwright, and `node scripts/ui-tour.mjs <url>` captures
+screenshots of every screen to `/tmp/`.
 
 ## Data notes
 

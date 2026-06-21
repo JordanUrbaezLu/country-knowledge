@@ -5,10 +5,28 @@ import type { StateFeature } from "../data/states";
 import type { Country, CountryFeature } from "../data/types";
 import { pointInGeometry } from "../lib/geo";
 
+/** A persistent, billboarded label pinned to a lat/lng on the globe (reveal). */
+export interface GlobeMarker {
+  id: string;
+  lat: number;
+  lng: number;
+  label: string;
+  /** accent/border/dot color */
+  color: string;
+  /** larger styling (used for the answer) */
+  emphasis?: boolean;
+}
+
 export interface GlobeViewProps {
   countries: Country[];
   /** country to "light up" (game). When set, all others dim. */
   highlightId?: string | null;
+  /** multiple countries to light up at once, each in its own color (reveal). */
+  highlights?: Record<string, string> | null;
+  /** floating name labels pinned to the globe (reveal). */
+  markers?: GlobeMarker[] | null;
+  /** camera altitude when focusing (globe radii); lower = closer. */
+  focusAltitude?: number;
   /** currently selected country (explore). */
   selectedId?: string | null;
   /** show name tooltip on country hover. Disable in the locate game. */
@@ -74,6 +92,14 @@ function crosshairLatOffset(fovDeg: number): number {
 
 const isState = (o: object): o is StateFeature => (o as StateFeature).__kind === "state";
 
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
 type CrosshairTarget =
   | { kind: "country"; id: string; name: string; country: Country }
   | { kind: "state"; id: string; name: string; state: StateFeature };
@@ -96,6 +122,9 @@ function useElementSize<T extends HTMLElement>() {
 export default function GlobeView({
   countries,
   highlightId = null,
+  highlights = null,
+  markers = null,
+  focusAltitude,
   selectedId = null,
   showLabels = true,
   autoRotate = false,
@@ -144,18 +173,21 @@ export default function GlobeView({
   // Accessors are memoized so a re-render that doesn't change what they read
   // (e.g. the crosshair pill updating) doesn't hand globe.gl new props and
   // force a full polygon restyle.
+  const dimOthers = !!highlightId || (!!highlights && Object.keys(highlights).length > 0);
+
   const capColor = useCallback(
     (obj: object): string => {
       if (isState(obj)) {
         return obj.__id === hoveredId ? COLORS.stateFillHover : COLORS.stateFill;
       }
       const id = (obj as CountryFeature).__id;
+      if (highlights && highlights[id]) return highlights[id];
       if (id === highlightId) return COLORS.highlight;
       if (id === selectedId) return COLORS.selected;
       if (id === hoveredId) return COLORS.hover;
-      return highlightId ? COLORS.landDim : COLORS.land;
+      return dimOthers ? COLORS.landDim : COLORS.land;
     },
-    [hoveredId, highlightId, selectedId],
+    [hoveredId, highlightId, highlights, selectedId, dimOthers],
   );
 
   const sideColor = useCallback(
@@ -178,12 +210,13 @@ export default function GlobeView({
     (obj: object): number => {
       if (isState(obj)) return !crosshair && obj.__id === hoveredId ? 0.03 : 0.012;
       const id = (obj as CountryFeature).__id;
+      if (highlights && highlights[id]) return 0.06;
       if (id === highlightId) return 0.06;
       if (id === selectedId) return 0.02;
       if (!crosshair && id === hoveredId) return 0.02;
       return 0.01;
     },
-    [hoveredId, highlightId, selectedId, crosshair],
+    [hoveredId, highlightId, highlights, selectedId, crosshair],
   );
 
   const label = useCallback(
@@ -202,6 +235,25 @@ export default function GlobeView({
     },
     [crosshair, showLabels, idToCountry],
   );
+
+  // Persistent floating labels (reveal): a colored pill pinned above its point.
+  // pointer-events:none so labels never block globe drag/zoom.
+  const htmlElement = useCallback((d: object): HTMLElement => {
+    const m = d as GlobeMarker;
+    const el = document.createElement("div");
+    el.style.cssText =
+      "pointer-events:none;transform:translate(-50%,-115%);white-space:nowrap;will-change:transform;";
+    const big = m.emphasis;
+    el.innerHTML =
+      `<div style="display:flex;align-items:center;gap:6px;` +
+      `padding:${big ? "4px 11px" : "3px 9px"};border-radius:9999px;` +
+      `background:rgba(5,7,15,.86);border:1.5px solid ${m.color};color:#eef2fb;` +
+      `font:${big ? 700 : 600} ${big ? 14 : 12}px system-ui,sans-serif;` +
+      `box-shadow:0 2px 10px rgba(0,0,0,.55)">` +
+      `<span style="width:9px;height:9px;border-radius:9999px;background:${m.color};` +
+      `box-shadow:0 0 7px ${m.color}"></span>${escapeHtml(m.label)}</div>`;
+    return el;
+  }, []);
 
   const handleClick = useCallback(
     (obj: object) => {
@@ -251,6 +303,7 @@ export default function GlobeView({
   useEffect(() => {
     if (!ready || !focus) return;
     let lat = focus.lat;
+    const alt = focusAltitude ?? FOCUS_ALTITUDE;
     if (crosshair) {
       // Land the focused country under the reticle, not the screen centre
       // (which sits behind/near the bottom sheet on phones).
@@ -258,8 +311,8 @@ export default function GlobeView({
       const camera = (globeRef.current as any)?.camera?.();
       lat = clamp(lat - crosshairLatOffset(camera?.fov ?? 50), -85, 85);
     }
-    globeRef.current?.pointOfView({ lat, lng: focus.lng, altitude: FOCUS_ALTITUDE }, 800);
-  }, [focus, ready, crosshair]);
+    globeRef.current?.pointOfView({ lat, lng: focus.lng, altitude: alt }, 800);
+  }, [focus, ready, crosshair, focusAltitude]);
 
   // Trackpad two-finger → rotate.
   useEffect(() => {
@@ -416,6 +469,11 @@ export default function GlobeView({
           polygonsTransitionDuration={crosshair ? 0 : 300}
           onPolygonClick={handleClick}
           onPolygonHover={handleHover}
+          htmlElementsData={markers ?? []}
+          htmlLat={(d: object) => (d as GlobeMarker).lat}
+          htmlLng={(d: object) => (d as GlobeMarker).lng}
+          htmlAltitude={0.02}
+          htmlElement={htmlElement}
         />
       )}
 
