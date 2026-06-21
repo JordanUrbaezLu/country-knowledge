@@ -83,6 +83,7 @@ export default function Reveal({ answer }: { answer: Country | null }) {
 function RoundRow({ r, colorIndex }: { r: RoundResult; colorIndex: number }) {
   const c = playerColor(colorIndex);
   const time = r.elapsedMs != null ? `${(r.elapsedMs / 1000).toFixed(1)}s` : null;
+  const partial = r.accuracy > 0 && r.accuracy < 1;
   return (
     <li className="flex items-center gap-2 rounded-lg bg-slate-800/50 px-3 py-1.5 text-sm">
       <span
@@ -90,9 +91,16 @@ function RoundRow({ r, colorIndex }: { r: RoundResult; colorIndex: number }) {
         style={{ background: c.hex, boxShadow: `0 0 6px ${c.hex}` }}
       />
       <span className="font-semibold text-slate-100">{r.name}</span>
-      <span aria-hidden>{r.correct ? "✅" : "❌"}</span>
+      <span
+        aria-hidden
+        title={partial ? "Close — half credit" : undefined}
+        className={partial ? "font-bold text-amber-400" : ""}
+      >
+        {r.accuracy >= 1 ? "✅" : partial ? "≈" : "❌"}
+      </span>
       <span className="flex-1 truncate text-slate-400">
         {r.pickedLabel ? r.pickedLabel : <span className="italic text-slate-500">no answer</span>}
+        {partial && <span className="text-amber-400/80"> · close</span>}
         {time && <span className="text-slate-600"> · {time}</span>}
       </span>
       <span

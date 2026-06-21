@@ -124,7 +124,7 @@ function dispatch(game: RoomGame, id: string, raw: string) {
     case "playAgain":
       return game.start(id, msg.difficulty, msg.sequence);
     case "answer":
-      return game.answer(id, msg.correct, msg.pickedLabel, msg.pickedCountryId);
+      return game.answer(id, msg.accuracy, msg.pickedLabel, msg.pickedCountryId);
     case "skip":
       return game.skip(id, msg.expect, msg.round);
   }
@@ -215,5 +215,5 @@ const heartbeat = setInterval(() => {
 heartbeat.unref?.();
 
 http.listen(PORT, () => {
-  console.log(`[mp] Country Knowledge server ready on :${PORT} (serving ./dist + realtime /ws)`);
+  console.log(`[mp] Globe Royale server ready on :${PORT} (serving ./dist + realtime /ws)`);
 });

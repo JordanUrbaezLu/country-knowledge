@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { flagUrl } from "../data/countries";
 import type { Country } from "../data/types";
-import { isCorrectName } from "../game/matching";
+import { matchAccuracy } from "../game/matching";
 import { MODE_LABELS } from "../game/questions";
 import { isTouchDevice } from "../lib/device";
 import { useKeyboardInset } from "../lib/useKeyboardInset";
@@ -46,9 +46,9 @@ export default function RoundHud({
   const submitTyped = (e: React.FormEvent) => {
     e.preventDefault();
     if (answered || !value.trim() || !target) return;
-    const correct = isCorrectName(value, target);
+    const accuracy = matchAccuracy(value, target);
     const pickedId = resolveGuessCountryId(value, countries);
-    submitAnswer(correct, value.trim(), pickedId);
+    submitAnswer(accuracy, value.trim(), pickedId);
   };
 
   return (

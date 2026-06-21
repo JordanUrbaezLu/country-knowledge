@@ -102,7 +102,7 @@ export default function MultiplayerView({
 
   const onCountryClick =
     isFind && !answered && target
-      ? (c: Country) => submitAnswer(c.id === target.id, c.name, c.id)
+      ? (c: Country) => submitAnswer(c.id === target.id ? 1 : 0, c.name, c.id)
       : undefined;
 
   const focus =

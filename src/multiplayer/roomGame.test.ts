@@ -54,15 +54,19 @@ function setup() {
 
 describe("scorePoints (speed bonus)", () => {
   it("is max at t=0 and floors a last-second correct, 0 for wrong", () => {
-    expect(scorePoints(true, 0, 10000)).toBe(1000);
-    expect(scorePoints(true, 10000, 10000)).toBe(MIN_CORRECT_POINTS);
-    expect(scorePoints(false, 0, 10000)).toBe(0);
+    expect(scorePoints(1, 0, 10000)).toBe(1000);
+    expect(scorePoints(1, 10000, 10000)).toBe(MIN_CORRECT_POINTS);
+    expect(scorePoints(0, 0, 10000)).toBe(0);
     // halfway through = halfway between floor and max
-    expect(scorePoints(true, 5000, 10000)).toBe(550);
+    expect(scorePoints(1, 5000, 10000)).toBe(550);
   });
   it("clamps out-of-range elapsed", () => {
-    expect(scorePoints(true, -100, 10000)).toBe(1000);
-    expect(scorePoints(true, 99999, 10000)).toBe(MIN_CORRECT_POINTS);
+    expect(scorePoints(1, -100, 10000)).toBe(1000);
+    expect(scorePoints(1, 99999, 10000)).toBe(MIN_CORRECT_POINTS);
+  });
+  it("gives half the points for a 0.5 near-miss", () => {
+    expect(scorePoints(0.5, 0, 10000)).toBe(500); // half of 1000
+    expect(scorePoints(0.5, 10000, 10000)).toBe(50); // half of the 100 floor
   });
 });
 
@@ -93,7 +97,7 @@ describe("RoomGame — lobby + colors", () => {
     game.join("b", "Bob");
     game.start("a", "medium", seq("FRA", "JPN"));
     io.advance(2000);
-    game.answer("a", true, "France", "FRA"); // Ann scores
+    game.answer("a", 1, "France", "FRA"); // Ann scores
     const before = game.players.get("a")!;
     const score = before.score;
     const color = before.colorIndex;
@@ -189,12 +193,12 @@ describe("RoomGame — round engine + scoring", () => {
 
     // both answer round 0 -> ends early into reveal
     io.advance(1000);
-    game.answer("a", true, "France", "FRA");
-    game.answer("b", false, "Spain", "ESP");
+    game.answer("a", 1, "France", "FRA");
+    game.answer("b", 0, "Spain", "ESP");
     expect(game.status).toBe("reveal");
     const reveal0 = io.latest("reveal")!;
     expect(reveal0.countryId).toBe("FRA");
-    expect(reveal0.results.find((r) => r.id === "a")!.correct).toBe(true);
+    expect(reveal0.results.find((r) => r.id === "a")!.accuracy).toBe(1);
     expect(reveal0.results.find((r) => r.id === "a")!.pickedCountryId).toBe("FRA");
     expect(reveal0.results.find((r) => r.id === "b")!.pickedCountryId).toBe("ESP");
 
@@ -205,7 +209,7 @@ describe("RoomGame — round engine + scoring", () => {
 
     // round 1: only A answers, timer expires for B
     io.advance(500);
-    game.answer("a", true, "Japan", "JPN");
+    game.answer("a", 1, "Japan", "JPN");
     expect(game.status).toBe("question"); // B hasn't answered yet
     io.fireTimer(); // question timer fires
     expect(game.status).toBe("reveal");
@@ -226,9 +230,9 @@ describe("RoomGame — round engine + scoring", () => {
     game.join("b", "Bob");
     game.start("a", "medium", seq("FRA"));
     io.advance(500);
-    game.answer("a", true, "France", "FRA"); // fast
+    game.answer("a", 1, "France", "FRA"); // fast
     io.advance(6000);
-    game.answer("b", true, "France", "FRA"); // slow but correct
+    game.answer("b", 1, "France", "FRA"); // slow but correct
     const r = io.latest("reveal")!;
     const ann = r.results.find((x) => x.id === "a")!;
     const bob = r.results.find((x) => x.id === "b")!;
@@ -241,9 +245,9 @@ describe("RoomGame — round engine + scoring", () => {
     game.join("a", "Ann");
     game.start("a", "medium", seq("FRA"));
     io.advance(1000);
-    game.answer("a", true, "France", "FRA");
+    game.answer("a", 1, "France", "FRA");
     const score = game.players.get("a")!.score;
-    game.answer("a", true, "France", "FRA"); // ignored (already answered)
+    game.answer("a", 1, "France", "FRA"); // ignored (already answered)
     expect(game.players.get("a")!.score).toBe(score);
   });
 });
@@ -255,7 +259,7 @@ describe("RoomGame — never stalls", () => {
     game.join("b", "Bob");
     game.start("a", "medium", seq("FRA", "JPN"));
     io.advance(1000);
-    game.answer("a", true, "France", "FRA"); // A done, B still owes
+    game.answer("a", 1, "France", "FRA"); // A done, B still owes
     expect(game.status).toBe("question");
     game.onClose("b"); // the only one left owing leaves
     expect(game.status).toBe("reveal");
@@ -266,7 +270,7 @@ describe("RoomGame — never stalls", () => {
     game.join("a", "Ann");
     game.start("a", "easy", seq("FRA"));
     io.advance(100);
-    game.answer("a", true, "France", "FRA");
+    game.answer("a", 1, "France", "FRA");
     expect(io.latest("reveal")!.nextInMs).toBe(REVEAL_MS);
   });
 });

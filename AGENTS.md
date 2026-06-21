@@ -1,4 +1,4 @@
-# Country Knowledge — agent brief
+# Globe Royale — agent brief
 
 3D-globe country-quiz. **Explore** (click a country → flag/capital/state borders), **Solo**
 (10-question round), and **Family** (online multiplayer, GeoGuessr-style). React + TypeScript +

@@ -41,7 +41,7 @@ export default function App() {
       {/* Header — desktop only; on mobile the centred toggle is the top bar so the
           brand doesn't collide with it at narrow widths (proper mobile top bar TBD). */}
       <header className="pointer-events-none absolute left-0 top-0 hidden pt-safe pl-safe p-3 sm:block sm:p-5">
-        <h1 className="text-sm font-bold tracking-tight sm:text-xl">Country Knowledge</h1>
+        <h1 className="text-sm font-bold tracking-tight sm:text-xl">Globe Royale</h1>
         <p className="hidden text-sm text-slate-400 sm:block">{HEADER_SUBTITLE[mode]}</p>
       </header>
 

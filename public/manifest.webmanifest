@@ -1,7 +1,7 @@
 {
-  "name": "Country Knowledge",
-  "short_name": "Countries",
-  "description": "Learn country names, flags, and locations on an interactive 3D globe.",
+  "name": "Globe Royale",
+  "short_name": "Globe Royale",
+  "description": "A fast, GeoGuessr-style globe game — spot the country, race the clock, and beat your friends online.",
   "start_url": "/",
   "display": "standalone",
   "orientation": "portrait",
