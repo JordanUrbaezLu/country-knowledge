@@ -70,10 +70,9 @@ npm run share       # builds, starts the server, AND opens a public tunnel — p
 Share the printed `https://….trycloudflare.com` link. They open it on their phones (cellular is fine),
 pick **Family**, and play. Keep that terminal open while you play; `Ctrl-C` ends it.
 
-> `npm run share` uses [`untun`](https://github.com/unjs/untun) (no install, no account). Equivalent
-> rock-solid manual route: `npm run play` in one terminal, then
-> `cloudflared tunnel --url http://localhost:1999` (`brew install cloudflared`) in another — both HTTP
-> and WebSocket are proxied, verified end-to-end.
+> `npm run share` bundles Cloudflare's tunnel (the [`cloudflared`](https://www.npmjs.com/package/cloudflared)
+> package; the binary downloads once on first run) — no install, no account. Both HTTP and WebSocket
+> are proxied, verified end-to-end (the app loads and a room connects through the public link).
 
 For local development (hot reload), `npm run dev:mp` runs Vite + the server together at
 `http://localhost:5173`.

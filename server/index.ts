@@ -164,8 +164,7 @@ http.listen(PORT, () => {
   console.log("  ────────────────────────────────────────────");
   console.log(`  On this computer:    http://localhost:${PORT}`);
   if (lan) console.log(`  Same Wi-Fi (family): http://${lan}:${PORT}`);
-  console.log(`  Family on cellular:  use a public link — run "npm run share" instead,`);
-  console.log(`                       or: npx untun@latest tunnel http://localhost:${PORT}`);
+  console.log(`  Family anywhere:     use "npm run share" for a public link`);
   console.log("  ────────────────────────────────────────────");
   console.log("  Open the link, pick Family, create a room, share its invite. Ctrl-C to stop.");
   console.log("");

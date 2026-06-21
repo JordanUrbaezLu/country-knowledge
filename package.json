@@ -7,7 +7,7 @@
     "dev": "vite",
     "dev:mp": "concurrently -k -n web,ws -c cyan,magenta \"VITE_WS_HOST=127.0.0.1:1999 vite\" \"tsx watch server/index.ts\"",
     "play": "npm run build && npm start",
-    "share": "npm run build && concurrently -k -n server,tunnel -c green,cyan \"npm start\" \"npx -y untun@latest tunnel http://localhost:1999\"",
+    "share": "npm run build && node scripts/share.mjs",
     "server": "tsx server/index.ts",
     "start": "tsx server/index.ts",
     "build": "tsc --noEmit && vite build",
@@ -20,6 +20,7 @@
     "build:flags": "node scripts/build-flags.mjs"
   },
   "dependencies": {
+    "cloudflared": "^0.7.1",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "react-globe.gl": "^2.38.0",
