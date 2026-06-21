@@ -15,7 +15,9 @@ services:
     runtime: node
     plan: free
     region: oregon
-    buildCommand: npm ci --include=dev --omit=optional && npm run build
+    # NB: do NOT --omit=optional — Vite 8's bundler (rolldown) ships its native
+    # binding as an optionalDependency; omitting it breaks the build.
+    buildCommand: npm ci --include=dev && npm run build
     startCommand: npm start
     healthCheckPath: /healthz
     envVars:

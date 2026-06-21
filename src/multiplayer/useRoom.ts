@@ -114,7 +114,7 @@ interface RoomState {
   joinRoom: (code: string, name: string) => void;
   startGame: (countries: Country[]) => void;
   playAgain: (countries: Country[]) => void;
-  submitAnswer: (correct: boolean, pickedLabel: string, pickedCountryId: string | null) => void;
+  submitAnswer: (accuracy: number, pickedLabel: string, pickedCountryId: string | null) => void;
   skip: (opts?: { expect?: "question" | "reveal"; round?: number }) => void;
   leave: () => void;
 }
@@ -279,10 +279,10 @@ export const useRoom = create<RoomState>((set, get) => {
         sequence: buildSequence(countries, get().lobbyDifficulty),
       }),
 
-    submitAnswer: (correct, pickedLabel, pickedCountryId) => {
+    submitAnswer: (accuracy, pickedLabel, pickedCountryId) => {
       if (get().answeredThisRound) return;
       set({ answeredThisRound: true });
-      send({ t: "answer", correct, pickedLabel, pickedCountryId });
+      send({ t: "answer", accuracy, pickedLabel, pickedCountryId });
     },
 
     skip: (opts) => send({ t: "skip", expect: opts?.expect, round: opts?.round }),

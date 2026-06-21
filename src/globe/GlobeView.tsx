@@ -15,7 +15,15 @@ export interface GlobeMarker {
   color: string;
   /** larger styling (used for the answer) */
   emphasis?: boolean;
+  /** render as a compact compass pole badge instead of a name pill */
+  pole?: "N" | "S";
 }
+
+// Always-on orientation aid: the poles track the real globe rotation.
+const POLE_MARKERS: GlobeMarker[] = [
+  { id: "pole-N", lat: 90, lng: 0, label: "N", color: "#f87171", pole: "N" },
+  { id: "pole-S", lat: -90, lng: 0, label: "S", color: "#7dd3fc", pole: "S" },
+];
 
 export interface GlobeViewProps {
   countries: Country[];
@@ -25,6 +33,8 @@ export interface GlobeViewProps {
   highlights?: Record<string, string> | null;
   /** floating name labels pinned to the globe (reveal). */
   markers?: GlobeMarker[] | null;
+  /** show always-on N/S compass pole badges (orientation aid). */
+  poles?: boolean;
   /** camera altitude when focusing (globe radii); lower = closer. */
   focusAltitude?: number;
   /** currently selected country (explore). */
@@ -124,6 +134,7 @@ export default function GlobeView({
   highlightId = null,
   highlights = null,
   markers = null,
+  poles = true,
   focusAltitude,
   selectedId = null,
   showLabels = true,
@@ -241,6 +252,16 @@ export default function GlobeView({
   const htmlElement = useCallback((d: object): HTMLElement => {
     const m = d as GlobeMarker;
     const el = document.createElement("div");
+    // Compact compass badge for the poles (centered on the point).
+    if (m.pole) {
+      el.style.cssText = "pointer-events:none;transform:translate(-50%,-50%);will-change:transform;";
+      el.innerHTML =
+        `<div style="display:flex;flex-direction:column;align-items:center;` +
+        `font:800 11px system-ui,sans-serif;color:${m.color};` +
+        `text-shadow:0 0 4px rgba(0,0,0,.9),0 0 2px rgba(0,0,0,.9);opacity:.92">` +
+        `${m.pole === "N" ? "▲" : "▼"}<span style="letter-spacing:.5px">${m.pole}</span></div>`;
+      return el;
+    }
     el.style.cssText =
       "pointer-events:none;transform:translate(-50%,-115%);white-space:nowrap;will-change:transform;";
     const big = m.emphasis;
@@ -469,7 +490,7 @@ export default function GlobeView({
           polygonsTransitionDuration={crosshair ? 0 : 300}
           onPolygonClick={handleClick}
           onPolygonHover={handleHover}
-          htmlElementsData={markers ?? []}
+          htmlElementsData={poles ? [...POLE_MARKERS, ...(markers ?? [])] : (markers ?? [])}
           htmlLat={(d: object) => (d as GlobeMarker).lat}
           htmlLng={(d: object) => (d as GlobeMarker).lng}
           htmlAltitude={0.02}

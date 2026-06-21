@@ -23,7 +23,7 @@ export default function JoinScreen({ initialCode }: { initialCode?: string | nul
   return (
     <div className="absolute inset-0 z-10 flex items-center justify-center p-4">
       <div className="w-full max-w-md rounded-2xl border border-slate-700/60 bg-slate-900/92 p-6 shadow-2xl backdrop-blur">
-        <h2 className="text-center text-2xl font-bold">Play with family</h2>
+        <h2 className="text-center text-2xl font-bold">Play online</h2>
         <p className="mt-1 text-center text-sm text-slate-400">
           {mode === "join" && initialCode
             ? `You've been invited to room ${code}`
@@ -36,7 +36,7 @@ export default function JoinScreen({ initialCode }: { initialCode?: string | nul
         <input
           value={name}
           onChange={(e) => setName(e.target.value)}
-          placeholder="e.g. Dad"
+          placeholder="e.g. John"
           maxLength={24}
           autoComplete="off"
           className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2.5 text-slate-100 outline-none focus:border-sky-400"

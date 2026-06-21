@@ -1,6 +1,6 @@
 /**
  * Wire protocol shared by the browser client (`src/multiplayer/*`) and the
- * authoritative PartyKit room (`party/server.ts`). Keep this transport-agnostic:
+ * authoritative game server (`server/index.ts`). Keep this transport-agnostic:
  * plain data + pure functions only, so both sides import one source of truth.
  */
 import type { Difficulty, QuestionMode } from "../game/questions";
@@ -16,11 +16,16 @@ export const COLOR_SLOTS = 10;
 export const MAX_POINTS = 1000;
 export const MIN_CORRECT_POINTS = 100;
 
-/** GeoGuessr-style speed bonus: full marks for instant, a floor for a last-second correct, 0 for wrong. */
-export function scorePoints(correct: boolean, elapsedMs: number, durationMs: number): number {
-  if (!correct) return 0;
+/**
+ * GeoGuessr-style speed bonus scaled by answer accuracy (1 = exact, 0.5 = a
+ * near-miss spelling, 0 = wrong): full marks for an instant exact answer, a floor
+ * for a last-second one, and half of all that for a 0.5 near-miss.
+ */
+export function scorePoints(accuracy: number, elapsedMs: number, durationMs: number): number {
+  if (accuracy <= 0) return 0;
   const frac = durationMs > 0 ? Math.min(1, Math.max(0, elapsedMs / durationMs)) : 1;
-  return Math.round(MIN_CORRECT_POINTS + (MAX_POINTS - MIN_CORRECT_POINTS) * (1 - frac));
+  const full = MIN_CORRECT_POINTS + (MAX_POINTS - MIN_CORRECT_POINTS) * (1 - frac);
+  return Math.round(Math.min(1, accuracy) * full);
 }
 
 /** One question in a host-generated round sequence. The server stays dataset-free. */
@@ -59,7 +64,8 @@ export interface RoomSnapshot {
 export interface RoundResult {
   id: string;
   name: string;
-  correct: boolean;
+  /** 1 = exact, 0.5 = near-miss spelling, 0 = wrong */
+  accuracy: number;
   points: number;
   /** what they typed/clicked, or "" if they didn't answer in time */
   pickedLabel: string;
@@ -75,7 +81,7 @@ export type ClientMsg =
   | { t: "join"; name: string }
   | { t: "rename"; name: string }
   | { t: "start"; difficulty: Difficulty; sequence: SeqItem[] }
-  | { t: "answer"; correct: boolean; pickedLabel: string; pickedCountryId: string | null }
+  | { t: "answer"; accuracy: number; pickedLabel: string; pickedCountryId: string | null }
   // `expect`/`round` make skip idempotent: the server ignores a stale click that
   // arrives after the round already auto-advanced, so it can't skip the NEXT one.
   | { t: "skip"; expect?: "question" | "reveal"; round?: number }

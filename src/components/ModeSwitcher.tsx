@@ -3,7 +3,7 @@ export type AppMode = "explore" | "solo" | "multiplayer";
 const LABELS: Record<AppMode, string> = {
   explore: "Explore",
   solo: "Solo",
-  multiplayer: "Family",
+  multiplayer: "Online",
 };
 
 export default function ModeSwitcher({

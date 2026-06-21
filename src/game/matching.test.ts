@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Country } from "../data/types";
 import { normalize } from "../lib/text";
-import { isCorrectName } from "./matching";
+import { isCorrectName, matchAccuracy } from "./matching";
 
 function country(...names: string[]): Country {
   return {
@@ -57,5 +57,28 @@ describe("isCorrectName", () => {
   it("rejects wrong answers and empty input", () => {
     expect(isCorrectName("France", usa)).toBe(false);
     expect(isCorrectName("   ", usa)).toBe(false);
+  });
+});
+
+describe("matchAccuracy (partial credit)", () => {
+  it("is 1 for exact and small typos (case-insensitive)", () => {
+    const de = country("Germany");
+    expect(matchAccuracy("germany", de)).toBe(1);
+    expect(matchAccuracy("Germny", de)).toBe(1); // 1 edit
+  });
+
+  it("gives 0.5 for a near-miss on a longer name", () => {
+    const de = country("Germany");
+    expect(matchAccuracy("Germeni", de)).toBe(0.5); // 2 edits, len >= 6
+  });
+
+  it("gives 0 (no partial) for short-name lookalikes — a different country, not a typo", () => {
+    expect(matchAccuracy("Iraq", country("Iran"))).toBe(0);
+    expect(matchAccuracy("Chae", country("Chad"))).toBe(0);
+  });
+
+  it("is 0 for way-off guesses and empty input", () => {
+    expect(matchAccuracy("Brazil", country("Germany"))).toBe(0);
+    expect(matchAccuracy("   ", country("Germany"))).toBe(0);
   });
 });

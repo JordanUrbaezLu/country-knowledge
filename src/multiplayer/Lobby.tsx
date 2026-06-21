@@ -22,7 +22,7 @@ export default function Lobby({ countries }: { countries: Country[] }) {
   const share = async () => {
     try {
       if (navigator.share) {
-        await navigator.share({ title: "Country Knowledge", text: "Join my game!", url });
+        await navigator.share({ title: "Globe Royale", text: "Join my game on Globe Royale!", url });
         return;
       }
     } catch {

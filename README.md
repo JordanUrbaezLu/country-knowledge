@@ -1,4 +1,4 @@
-# Country Knowledge
+# Globe Royale
 
 An interactive 3D globe for learning country **names, flags, and locations** — explore the
 world, then test yourself with a 10-question quiz.
@@ -99,6 +99,10 @@ The free plan sleeps after ~15 min idle (first visitor then waits ~50s); switch 
 > **Keep it to one instance.** Rooms live in memory, so the app must run as a single instance (don't
 > enable autoscaling). A restart simply ends any in-progress games — fine for casual play. (Sharding
 > across instances would need shared state, e.g. Redis — out of scope for now.)
+
+**Use your own domain.** Buy a domain (~$12/yr), then in Render → your service → **Settings → Custom
+Domains → Add** and follow the CNAME/ALIAS instructions at your registrar; Render auto-issues HTTPS.
+No code change is needed — the client connects same-origin, so it works on the new domain automatically.
 
 ## Tech stack
 

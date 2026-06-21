@@ -1,10 +1,10 @@
 /**
  * Pure, transport-agnostic multiplayer game engine. Holds ALL room state and
  * rules (players, scoring, round progression, host hand-off, rejoin) with zero
- * dependency on PartyKit or the network — every side effect goes through the
+ * dependency on the network/transport — every side effect goes through the
  * injected `RoomIO`, and the clock + timer are injected too. That makes the
  * whole state machine deterministically unit-testable (see roomGame.test.ts),
- * and keeps `party/server.ts` a thin adapter.
+ * and keeps `server/index.ts` a thin adapter.
  *
  * It is deliberately dataset-free: the host's browser generates the question
  * `sequence` (countryId + mode + duration) and ships it in `start`, so the
@@ -42,7 +42,7 @@ interface Player {
   colorIndex: number;
   // reset every round:
   answered: boolean;
-  correct: boolean;
+  accuracy: number; // 1 exact, 0.5 near-miss, 0 wrong
   points: number;
   pickedLabel: string;
   pickedCountryId: string | null;
@@ -82,6 +82,11 @@ export class RoomGame {
 
   // ---- connection lifecycle ----
 
+  /** Stop any pending round timer (called when the host GCs an empty room). */
+  dispose() {
+    this.io.clearTimer();
+  }
+
   /** A socket connected but hasn't joined with a name yet — just catch it up. */
   onConnect(connId: string) {
     this.io.send(connId, { t: "state", room: this.snapshot() });
@@ -115,7 +120,7 @@ export class RoomGame {
         connected: true,
         colorIndex: this.nextColor(),
         answered: false,
-        correct: false,
+        accuracy: 0,
         points: 0,
         pickedLabel: "",
         pickedCountryId: null,
@@ -154,7 +159,7 @@ export class RoomGame {
     this.startQuestion(0);
   }
 
-  answer(connId: string, correct: boolean, pickedLabel: string, pickedCountryId: string | null) {
+  answer(connId: string, accuracy: number, pickedLabel: string, pickedCountryId: string | null) {
     if (this.status !== "question") return;
     const p = this.players.get(connId);
     if (!p || p.answered) return;
@@ -162,12 +167,12 @@ export class RoomGame {
     const item = this.sequence[this.round];
     const elapsed = this.io.now() - this.questionStart;
     p.answered = true;
-    p.correct = !!correct;
+    p.accuracy = Number.isFinite(accuracy) ? Math.min(1, Math.max(0, accuracy)) : 0;
     p.elapsedMs = elapsed;
     p.pickedLabel = String(pickedLabel ?? "").slice(0, 60);
     p.pickedCountryId =
       typeof pickedCountryId === "string" && pickedCountryId ? pickedCountryId : null;
-    p.points = scorePoints(p.correct, elapsed, item ? item.durationMs : 0);
+    p.points = scorePoints(p.accuracy, elapsed, item ? item.durationMs : 0);
     p.score += p.points;
 
     this.broadcastState(); // refresh everyone's "answered" tally
@@ -273,7 +278,7 @@ export class RoomGame {
 
   private resetRoundFields(p: Player) {
     p.answered = false;
-    p.correct = false;
+    p.accuracy = 0;
     p.points = 0;
     p.pickedLabel = "";
     p.pickedCountryId = null;
@@ -285,7 +290,7 @@ export class RoomGame {
     const results: RoundResult[] = [...this.players.values()].map((p) => ({
       id: p.id,
       name: p.name,
-      correct: p.correct,
+      accuracy: p.accuracy,
       points: p.points,
       pickedLabel: p.pickedLabel,
       pickedCountryId: p.pickedCountryId,
