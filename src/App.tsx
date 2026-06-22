@@ -1,6 +1,9 @@
-import { Suspense, lazy, useState } from "react";
+import { Suspense, lazy, useEffect, useState } from "react";
 import ModeSwitcher, { type AppMode } from "./components/ModeSwitcher";
 import { useCountries } from "./data/useCountries";
+import { useAuth } from "./auth/useAuth";
+import AccountScreen from "./auth/AccountScreen";
+import ProfileView from "./profile/ProfileView";
 
 // Code-split the globe-heavy views (three.js / react-globe.gl is ~2MB) so the
 // shell + menu paint immediately and the globe chunk streams in after.
@@ -29,6 +32,17 @@ const HEADER_SUBTITLE: Record<AppMode, string> = {
 export default function App() {
   const { countries, error } = useCountries();
   const [mode, setMode] = useState<AppMode>(initialRoom ? "multiplayer" : "explore");
+
+  const user = useAuth((s) => s.user);
+  const accountsAvailable = useAuth((s) => s.available);
+  const bootstrap = useAuth((s) => s.bootstrap);
+  const logout = useAuth((s) => s.logout);
+  const [accountOpen, setAccountOpen] = useState(false);
+
+  // Non-blocking session check on load — guests are never made to wait.
+  useEffect(() => {
+    void bootstrap();
+  }, [bootstrap]);
 
   return (
     <div className="relative h-full w-full overflow-hidden">
@@ -70,6 +84,39 @@ export default function App() {
         </span>
         <ModeSwitcher mode={mode} onChange={setMode} />
       </div>
+
+      {/* Account chip — top-right. Hidden when the server has accounts disabled. */}
+      {accountsAvailable && (
+        <div className="absolute right-0 top-0 z-40 p-3 pt-safe pr-safe sm:p-5">
+          <button
+            onClick={() => setAccountOpen(true)}
+            className="flex items-center gap-1.5 rounded-full border border-slate-600/70 bg-slate-900/80 px-3 py-1.5 text-sm font-semibold text-slate-100 shadow-lg backdrop-blur transition hover:bg-slate-800"
+          >
+            {user ? (
+              <>
+                <span aria-hidden>👤</span>
+                <span className="max-w-28 truncate">{user.displayName}</span>
+              </>
+            ) : (
+              "Sign in"
+            )}
+          </button>
+        </div>
+      )}
+
+      {accountOpen &&
+        (user ? (
+          <ProfileView
+            user={user}
+            onClose={() => setAccountOpen(false)}
+            onLogout={async () => {
+              await logout();
+              setAccountOpen(false);
+            }}
+          />
+        ) : (
+          <AccountScreen onClose={() => setAccountOpen(false)} onDone={() => setAccountOpen(false)} />
+        ))}
 
       {!countries && !error && <Splash text="Loading globe…" />}
       {error && <Splash text={`Error: ${error}`} />}

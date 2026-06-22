@@ -4,8 +4,8 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "dev:mp": "concurrently -k -n web,ws -c cyan,magenta \"VITE_WS_HOST=127.0.0.1:1999 vite\" \"tsx watch server/index.ts\"",
+    "dev": "concurrently -k -n web,ws -c cyan,magenta \"vite\" \"tsx watch server/index.ts\"",
+    "dev:web": "vite",
     "play": "npm run build && npm start",
     "share": "npm run build && node scripts/share.mjs",
     "server": "tsx server/index.ts",
@@ -17,9 +17,11 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "build:states": "node scripts/build-states.mjs",
-    "build:flags": "node scripts/build-flags.mjs"
+    "build:flags": "node scripts/build-flags.mjs",
+    "insights": "tsx scripts/insights.ts"
   },
   "dependencies": {
+    "pg": "^8.22.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "react-globe.gl": "^2.38.0",
@@ -34,11 +36,13 @@
     "cloudflared": "^0.7.1"
   },
   "devDependencies": {
+    "@anthropic-ai/sdk": "^0.105.0",
     "@tailwindcss/vite": "^4.3.0",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@types/node": "^25.9.2",
+    "@types/pg": "^8.20.0",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "@types/three": "^0.184.1",
@@ -47,6 +51,7 @@
     "concurrently": "^10.0.3",
     "jsdom": "^29.1.1",
     "partysocket": "^1.2.0",
+    "pg-mem": "^3.0.14",
     "playwright": "^1.60.0",
     "tailwindcss": "^4.3.0",
     "typescript": "^6.0.3",

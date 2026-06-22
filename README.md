@@ -104,6 +104,32 @@ The free plan sleeps after ~15 min idle (first visitor then waits ~50s); switch 
 Domains → Add** and follow the CNAME/ALIAS instructions at your registrar; Render auto-issues HTTPS.
 No code change is needed — the client connects same-origin, so it works on the new domain automatically.
 
+### Accounts, stats & insights (optional)
+
+Accounts are **opt-in and additive** — without them the game runs exactly as before (guests play with
+zero sign-up). Turn them on by giving the server a Postgres database and a session secret:
+
+1. **Create a free Postgres** at [Neon](https://neon.tech) (or Supabase) → copy the connection string.
+2. **Set two env vars** on your host (Render → service → **Environment**), or in a local `.env`:
+   - `DATABASE_URL` — the Neon connection string
+   - `SESSION_SECRET` — any long random value: `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`
+3. Deploy. The server **auto-creates its tables on boot** and the account chip appears in the app.
+   Players sign up with just a username + password (no email), or keep playing as guests. Every solo
+   and Family answer is recorded per account, powering the profile stats + global leaderboard.
+
+**Personalized insights** (the "here's how you play" message) are generated **locally, on demand** —
+no AI runs on the server and no API key is ever deployed:
+
+```bash
+# one-time: put your Anthropic key in .env (local only) — console.anthropic.com → API keys
+echo 'ANTHROPIC_API_KEY=sk-ant-...' >> .env
+npm run insights        # reads the DB, writes data/insights.json (cheap; uses Claude Haiku)
+git add data/insights.json && git commit -m "Refresh insights" && git push   # deploy to show them
+```
+
+Each player sees only their own insight (served by the login-gated `/api/insights`). Re-run whenever
+you want to refresh them.
+
 ## Tech stack
 
 | Concern | Choice |

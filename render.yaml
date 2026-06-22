@@ -3,9 +3,12 @@
 #
 # Notes:
 # - The single Node service serves the built app AND the realtime WebSocket on
-#   one URL. No env vars needed (the client connects same-origin).
+#   one URL (the client connects same-origin).
+# - ACCOUNTS: set DATABASE_URL (Neon/Supabase Postgres) + SESSION_SECRET below to
+#   enable login/stats. Without them the server still runs — guests just play with
+#   no accounts. The Anthropic key is NOT set here (insights run locally).
 # - Rooms are in-memory, so keep this at ONE instance (don't enable scaling); a
-#   restart just ends any in-progress games.
+#   restart just ends any in-progress games. (Accounts/stats persist in Postgres.)
 # - "plan: free" sleeps after ~15 min idle (first visitor then waits ~50s).
 #   Change to "starter" for always-on, no cold starts (recommended for a public
 #   GeoGuessr-style site).
@@ -23,3 +26,9 @@ services:
     envVars:
       - key: NODE_VERSION
         value: "22.22.3"
+      # Accounts/stats (optional). Set these in the Render dashboard to enable
+      # login; leave unset to run guests-only. sync:false = not stored in the repo.
+      - key: DATABASE_URL
+        sync: false
+      - key: SESSION_SECRET
+        sync: false

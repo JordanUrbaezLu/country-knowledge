@@ -1,5 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRoom } from "./useRoom";
+import { useAuth } from "../auth/useAuth";
+import AccountScreen from "../auth/AccountScreen";
 
 /**
  * Entry point for multiplayer: "send a link, enter your name, that's it."
@@ -13,9 +15,17 @@ export default function JoinScreen({ initialCode }: { initialCode?: string | nul
   const createRoom = useRoom((s) => s.createRoom);
   const joinRoom = useRoom((s) => s.joinRoom);
 
-  const [name, setName] = useState(savedName);
+  const user = useAuth((s) => s.user);
+
+  const [name, setName] = useState(user?.displayName ?? savedName);
   const [code, setCode] = useState((initialCode ?? "").toUpperCase());
   const [mode, setMode] = useState<"home" | "join">(initialCode ? "join" : "home");
+  const [showLogin, setShowLogin] = useState(false);
+
+  // Logging in (here or via the account chip) auto-fills the account name.
+  useEffect(() => {
+    if (user?.displayName) setName(user.displayName);
+  }, [user]);
 
   const nameOk = name.trim().length > 0;
   const codeOk = code.trim().length === 4;
@@ -96,7 +106,27 @@ export default function JoinScreen({ initialCode }: { initialCode?: string | nul
         )}
 
         {error && <p className="mt-3 text-center text-sm text-amber-400">{error}</p>}
+
+        {!user && (
+          <button
+            onClick={() => setShowLogin(true)}
+            className="mt-4 w-full text-center text-xs font-semibold text-sky-300 hover:text-sky-200"
+          >
+            Have an account? Log in
+          </button>
+        )}
       </div>
+
+      {/* Inline login — overlays in place so the room link / context is preserved. */}
+      {showLogin && (
+        <AccountScreen
+          initialTab="login"
+          title="Log in"
+          subtitle="We'll use your account name and save your stats."
+          onClose={() => setShowLogin(false)}
+          onDone={() => setShowLogin(false)}
+        />
+      )}
     </div>
   );
 }

@@ -26,6 +26,11 @@
   unit-tested surface; `server/index.ts` is a thin adapter (same-id reconnect = "last socket wins").
 - `server/` is **not in the main tsconfig**. Typecheck it separately: `npm run typecheck:server`
   (`server/tsconfig.json`, node types).
+- **Env files:** real values go in gitignored `.env.local` (preferred) or `.env`; the committed
+  `.env.example` is the names-only template. Server loads them via `process.loadEnvFile()`, which is
+  **first-wins** (never overwrites an already-set key) and reads only the exact path given — so it loads
+  `.env.local` **before** `.env` (local overrides) and Vite is **not** consulted for server vars. Host/shell
+  env beats both files (prod injects directly). Only `VITE_`-prefixed vars reach the client bundle (PUBLIC).
 - Player colors: `PLAYER_COLORS` (src/multiplayer/colors.ts) length **must equal `COLOR_SLOTS`** (10)
   in protocol.ts. Server assigns the lowest slot not held by a *connected* player (reuses ghosts).
 - Reveal map: `GlobeView` takes `highlights: Record<id,color>` (answer gold + each guess in its
@@ -36,6 +41,21 @@
 - Test gotchas: CSS `text-transform:uppercase` makes `innerText` UPPERCASE (match case-insensitively);
   `vite dev` binds `localhost`/`::1`, not `127.0.0.1` (port checks must try both).
 - Node 22 LTS via Homebrew (`/opt/homebrew/bin/node`); Vite 8 needs ≥20.19.
+- **Accounts/auth/stats (opt-in; guests unaffected).** Postgres via `DATABASE_URL` (Neon); only new
+  runtime dep is `pg` (pure-JS) + built-in scrypt. `server/db.ts` is the data layer (injectable
+  `Queryable` → tests run on `pg-mem`, NO live DB). `server/auth.ts` = scrypt + a signed httpOnly
+  **sliding** session cookie (~1yr, renewed each request → "log in once"; Safari's 7-day cap is
+  JS-cookie-only, so a server `Set-Cookie` persists on iPhone). `server/api.ts` (`/api/*`) is mounted
+  in `server/index.ts` before sirv. **No `DATABASE_URL`+`SESSION_SECRET` ⇒ `/api`→503 and guests
+  still play.** Per-answer **`attempts`** log is the source of truth; every stat is SQL over it
+  (`mp_games` holds win placement). MP results attribute via `server/mpStats.ts` (pure, tested) hooked
+  into the `io.broadcast` seam — engine stays dataset-free; the session cookie rides the same-origin WS
+  upgrade so `readSession(req)` maps player→account in `wss.on("connection")`.
+- **Insights are OFFLINE & manual.** `npm run insights` (`scripts/insights.ts`) runs LOCALLY: reads
+  Neon → `computeInsightFeatures` (pure, `server/insights.ts`) → Claude **Haiku 4.5** with the LOCAL
+  `ANTHROPIC_API_KEY` (never deployed) → writes committed `data/insights.json`
+  (`{userId:{message,generated_at}}`). You merge+deploy; gated `GET /api/insights` returns only the
+  logged-in user's entry. (Consult the `claude-api` skill for current model/SDK before editing it.)
 
 ## Code map
 - `src/game/questions.ts` — question generation, **difficulty fame buckets** (easy 50 / med 120 / hard all), `MODE_DURATION_MS`.
@@ -47,13 +67,18 @@
 - `src/multiplayer/MultiplayerView.tsx` — orchestrator: one persistent globe + phase overlays + reveal lighting.
 - `src/multiplayer/{JoinScreen,Lobby,RoundHud,Reveal,GameOver,Timer,ui,colors,resolveGuess}` — screens + helpers.
 - `src/globe/GlobeView.tsx` — globe (highlights / markers / focusAltitude).
+- `server/{db,auth,api,mpStats,insights}.ts` — accounts data layer / scrypt+sessions / `/api/*` routes / MP→DB mappers / pure feature analysis (all listed in `server/tsconfig.json`).
+- `src/auth/{useAuth.ts,AccountScreen.tsx,recordSolo.ts}` + `src/profile/ProfileView.tsx` — auth store, iPhone-first login UI, solo-result POST, profile (stats + leaderboard + insight). Account chip + boot check live in `src/App.tsx`.
+- `scripts/insights.ts` — local Claude batch → `data/insights.json`.
 
 ## Commands
 - `npm run play` — host a game (build + serve app + multiplayer on :1999). `npm run share` — same + public tunnel link.
-- `npm run dev:mp` — Vite + server together (hot reload) for dev. `npm run dev` = Vite only.
+- `npm run dev` — Vite + game server together (hot reload); Vite proxies `/ws` → :1999 so dev is **same-origin like prod** (no `VITE_WS_HOST`). `npm run dev:web` = Vite only (frontend, no multiplayer).
 - `npm run build` — typecheck (SPA) + prod build. `npm run typecheck:server` — server typecheck.
 - `npm run test` — unit tests. `npm run check` — build + server typecheck + tests.
 - `node scripts/mp-e2e.mjs` — **live e2e**: spins up the server + Vite, plays a full 2-player game incl. reconnect + rematch.
+- `node scripts/auth-e2e.mjs` — **live emulated-iPhone** auth+profile e2e against Neon (signup → cookie persists → solo stats → logout; needs `DATABASE_URL`; self-cleans `zz_e2e_*` users).
+- `npm run insights` — LOCAL: regenerate `data/insights.json` from Neon via Claude (needs `DATABASE_URL` + `ANTHROPIC_API_KEY`).
 
 ## Verification bar for changes
 `npm run check` green **and** `node scripts/mp-e2e.mjs` green (exit 0). For multiplayer/visual changes,
