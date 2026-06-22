@@ -6,8 +6,8 @@
  *   node scripts/clean-test-users.mjs          # dry run — lists what WOULD be deleted
  *   node scripts/clean-test-users.mjs --apply  # actually delete
  *
- * Matches usernames starting with the literal "zz_" (case-insensitive). Real
- * accounts never use that prefix.
+ * Matches usernames starting with "zz" (case-insensitive) — the throwaway
+ * prefix used by all test/verify scripts. Real accounts never use that prefix.
  */
 import { existsSync } from "node:fs";
 import pg from "pg";
@@ -33,9 +33,10 @@ try {
   const all = await pool.query("SELECT username FROM users ORDER BY username");
   console.log(`all accounts (${all.rows.length}):`, all.rows.map((r) => r.username).join(", ") || "(none)");
 
-  // `\_` escapes the LIKE single-char wildcard so we match a literal "zz_".
+  // Match any "zz"-prefixed account — the throwaway prefix every test/verify
+  // script uses (zz_e2e_*, zz_audit_*, zzgm*, …). Real accounts never start "zz".
   const test = await pool.query(
-    "SELECT id, username FROM users WHERE username_lower LIKE 'zz\\_%'",
+    "SELECT id, username FROM users WHERE username_lower LIKE 'zz%'",
   );
   const names = test.rows.map((r) => r.username);
   console.log(`test accounts (${test.rows.length}):`, names.join(", ") || "(none)");

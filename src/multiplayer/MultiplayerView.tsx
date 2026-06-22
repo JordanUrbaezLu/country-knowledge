@@ -101,6 +101,9 @@ export default function MultiplayerView({
   // What the globe shows for the live question.
   const isLocate = phase === "question" && question?.mode === "locate";
   const isFind = phase === "question" && question?.mode === "name";
+  // Easy-mode flag hint (same as solo): light up + fly to the country so you can
+  // see WHERE it is while naming it from its flag.
+  const easyFlagHint = phase === "question" && question?.mode === "flag" && room?.difficulty === "easy";
 
   const onCountryClick =
     isFind && !answered && target
@@ -110,7 +113,7 @@ export default function MultiplayerView({
   const focus =
     phase === "reveal" && answer && answer.lat != null && answer.lng != null
       ? { lat: answer.lat, lng: answer.lng }
-      : isLocate && target && target.lat != null && target.lng != null
+      : (isLocate || easyFlagHint) && target && target.lat != null && target.lng != null
         ? { lat: target.lat, lng: target.lng }
         : null;
 
@@ -120,7 +123,7 @@ export default function MultiplayerView({
         countries={countries}
         showLabels={phase === "reveal"}
         autoRotate={phase === "home" || phase === "connecting" || phase === "lobby" || phase === "gameover"}
-        highlightId={isLocate && target ? target.id : null}
+        highlightId={(isLocate || easyFlagHint) && target ? target.id : null}
         highlights={revealGlobe?.highlights ?? null}
         markers={revealGlobe?.markers ?? null}
         poles={settings.showPoles}
