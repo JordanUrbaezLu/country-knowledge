@@ -1,10 +1,11 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import DifficultyPicker from "../components/DifficultyPicker";
 import QuizHud from "../components/QuizHud";
 import Results from "../components/Results";
 import GlobeView from "../globe/GlobeView";
 import type { Country } from "../data/types";
 import { isTouchDevice } from "../lib/device";
+import { recordSoloRound } from "../auth/recordSolo";
 import type { Difficulty } from "./questions";
 import { useGame } from "./store";
 
@@ -13,6 +14,31 @@ export default function GameView({ countries }: { countries: Country[] }) {
   const start = useGame((s) => s.start);
   const setDifficulty = useGame((s) => s.setDifficulty);
   const answerClick = useGame((s) => s.answerClick);
+
+  // When a round finishes, log each question to the player's account (no-op for
+  // guests). Guarded so it fires exactly once per completed round.
+  const submittedRef = useRef(false);
+  useEffect(() => {
+    if (status !== "done") {
+      submittedRef.current = false;
+      return;
+    }
+    if (submittedRef.current) return;
+    submittedRef.current = true;
+    const { records, difficulty: diff } = useGame.getState();
+    void recordSoloRound({
+      gameId: crypto.randomUUID(),
+      difficulty: diff,
+      attempts: records.map((r) => ({
+        mode: r.question.mode,
+        countryId: r.question.country.id,
+        promptLabel: r.question.country.name,
+        givenAnswer: r.given,
+        correctAnswer: r.question.country.name,
+        isCorrect: r.correct,
+      })),
+    });
+  }, [status]);
 
   const q = questions[index];
   const target = q?.country ?? null;

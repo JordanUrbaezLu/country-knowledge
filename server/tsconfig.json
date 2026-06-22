@@ -14,5 +14,14 @@
     "esModuleInterop": true,
     "resolveJsonModule": true
   },
-  "include": ["index.ts", "../src/multiplayer/roomGame.ts", "../src/multiplayer/protocol.ts"]
+  "include": [
+    "index.ts",
+    "db.ts",
+    "auth.ts",
+    "api.ts",
+    "mpStats.ts",
+    "insights.ts",
+    "../src/multiplayer/roomGame.ts",
+    "../src/multiplayer/protocol.ts"
+  ]
 }

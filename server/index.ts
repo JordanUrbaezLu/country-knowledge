@@ -8,10 +8,28 @@
  * Run: `tsx server/index.ts` (PORT env, default 1999). Serves ./dist if present.
  */
 import { createServer } from "node:http";
+import { randomUUID } from "node:crypto";
 import { WebSocketServer, type WebSocket } from "ws";
 import sirv from "sirv";
 import { RoomGame, type RoomIO } from "../src/multiplayer/roomGame";
-import { encode, type ClientMsg } from "../src/multiplayer/protocol";
+import { encode, type ClientMsg, type ServerMsg } from "../src/multiplayer/protocol";
+import { handleApi } from "./api";
+import { getData, type Data } from "./db";
+import { readSession } from "./auth";
+import { applyBroadcast, type RoomTrack } from "./mpStats";
+
+// Load local dev secrets (DATABASE_URL, SESSION_SECRET) from env files if present.
+// Node's loadEnvFile is FIRST-WINS (it never overwrites an already-set key) and
+// reads only the path given, so load the higher-priority .env.local BEFORE .env.
+// Real host/shell env still beats both files, so this is a no-op in production
+// (Render/Fly/etc. inject env directly; neither file exists there).
+for (const file of [".env.local", ".env"]) {
+  try {
+    process.loadEnvFile(file);
+  } catch {
+    /* file absent — fine */
+  }
+}
 
 const PORT = Number(process.env.PORT) || 1999;
 const MAX_ROOMS = 5000;
@@ -25,11 +43,32 @@ process.on("unhandledRejection", (e) => console.error("[mp] unhandledRejection:"
 // Serve the production SPA build (no-op 404 in dev where dist may be absent).
 const assets = sirv("dist", { single: true, dev: false, gzip: true });
 
-const http = createServer((req, res) => {
+// The accounts/stats data layer. Stays null (accounts disabled, guests still play)
+// until a DATABASE_URL + SESSION_SECRET are configured and migrate() succeeds.
+let data: Data | null = null;
+
+const http = createServer(async (req, res) => {
   if (req.url === "/healthz") {
     res.writeHead(200, { "content-type": "text/plain" });
     res.end("ok");
     return;
+  }
+  if ((req.url ?? "").startsWith("/api/")) {
+    if (!data) {
+      res.writeHead(503, { "content-type": "application/json" });
+      res.end(JSON.stringify({ error: "Accounts are not configured on this server" }));
+      return;
+    }
+    try {
+      if (await handleApi(req, res, { data })) return;
+    } catch (e) {
+      console.error("[api] unhandled:", e);
+      if (!res.headersSent) {
+        res.writeHead(500, { "content-type": "application/json" });
+        res.end(JSON.stringify({ error: "Server error" }));
+      }
+      return;
+    }
   }
   assets(req, res, () => {
     res.writeHead(404, { "content-type": "text/plain" });
@@ -43,6 +82,29 @@ interface Room {
   // all share one player record and all receive broadcasts — no tab fighting.
   conns: Map<string, Set<WebSocket>>;
   gc: ReturnType<typeof setTimeout> | null;
+  // per-room context for attributing results to accounts (logged-in players only)
+  track: RoomTrack;
+}
+
+// Persist multiplayer results for logged-in players by observing the SAME
+// broadcasts the engine already emits — so the dataset-free engine stays
+// untouched. All writes are fire-and-forget and guarded: a DB hiccup must never
+// affect a live game. No-op when accounts are disabled or all players are guests.
+function persistFromBroadcast(track: RoomTrack, msg: ServerMsg): void {
+  if (!data) return;
+  try {
+    const eff = applyBroadcast(track, msg, randomUUID);
+    if (eff.attempts?.length) {
+      data.recordAttempts(eff.attempts).catch((e) => console.error("[mp] attempt log:", e));
+    }
+    if (eff.mpResult && eff.mpResult.results.length) {
+      data
+        .recordMpResult(eff.mpResult.gameId, eff.mpResult.results)
+        .catch((e) => console.error("[mp] mp result:", e));
+    }
+  } catch (e) {
+    console.error("[mp] persistFromBroadcast:", e);
+  }
 }
 
 const rooms = new Map<string, Room>();
@@ -58,6 +120,7 @@ function getRoom(code: string): Room {
   }
   const conns = new Map<string, Set<WebSocket>>();
   const timer = { id: null as ReturnType<typeof setTimeout> | null };
+  const track: RoomTrack = { userIds: new Map(), gameId: null, mode: null, difficulty: null };
   const sendTo = (ws: WebSocket, s: string) => {
     if (ws.readyState === ws.OPEN) ws.send(s);
   };
@@ -72,6 +135,7 @@ function getRoom(code: string): Room {
     broadcast: (msg) => {
       const s = encode(msg);
       for (const set of conns.values()) for (const ws of set) sendTo(ws, s);
+      persistFromBroadcast(track, msg);
     },
     scheduleTimer: (ms, fn) => {
       if (timer.id) clearTimeout(timer.id);
@@ -90,7 +154,7 @@ function getRoom(code: string): Room {
       }
     },
   };
-  const room: Room = { game: new RoomGame(code, io), conns, gc: null };
+  const room: Room = { game: new RoomGame(code, io), conns, gc: null, track };
   rooms.set(code, room);
   return room;
 }
@@ -150,6 +214,16 @@ wss.on("connection", (ws, req) => {
     }
 
     const room = getRoom(code);
+    // Attribute this connection to an account if it carries a valid session
+    // cookie (same-origin WS upgrade → cookies are present). Guests stay unmapped.
+    if (data) {
+      try {
+        const uid = readSession(req);
+        if (uid) room.track.userIds.set(id, uid);
+      } catch {
+        /* no valid session — play as guest */
+      }
+    }
     let set = room.conns.get(id);
     if (!set) {
       set = new Set();
@@ -213,6 +287,29 @@ const heartbeat = setInterval(() => {
   }
 }, 30_000);
 heartbeat.unref?.();
+
+// Bring up the accounts DB if configured. Fire-and-forget so the server binds
+// immediately; until migrate() resolves, /api returns 503 (guests are unaffected).
+async function initData(): Promise<void> {
+  if (!process.env.DATABASE_URL) {
+    console.warn("[mp] DATABASE_URL not set — accounts/stats disabled (guests still play).");
+    return;
+  }
+  if (!process.env.SESSION_SECRET) {
+    console.error("[mp] SESSION_SECRET not set — accounts disabled. Set it to enable login.");
+    return;
+  }
+  try {
+    const d = await getData();
+    await d.migrate();
+    data = d;
+    console.log("[mp] accounts DB ready");
+  } catch (e) {
+    console.error("[mp] accounts DB init failed — accounts disabled:", e);
+  }
+}
+
+void initData();
 
 http.listen(PORT, () => {
   console.log(`[mp] Globe Royale server ready on :${PORT} (serving ./dist + realtime /ws)`);
