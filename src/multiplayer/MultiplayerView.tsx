@@ -2,6 +2,7 @@ import { useEffect, useMemo } from "react";
 import type { Country } from "../data/types";
 import GlobeView, { type GlobeMarker } from "../globe/GlobeView";
 import { isTouchDevice } from "../lib/device";
+import { useAuth } from "../auth/useAuth";
 import { playerColor } from "./colors";
 import GameOver from "./GameOver";
 import JoinScreen from "./JoinScreen";
@@ -28,6 +29,7 @@ export default function MultiplayerView({
   const leave = useRoom((s) => s.leave);
   const submitAnswer = useRoom((s) => s.submitAnswer);
 
+  const settings = useAuth((s) => s.settings);
   const byId = useMemo(() => new Map(countries.map((c) => [c.id, c])), [countries]);
 
   const phase: "home" | "connecting" | "lobby" | "question" | "reveal" | "gameover" = !code
@@ -121,6 +123,8 @@ export default function MultiplayerView({
         highlightId={isLocate && target ? target.id : null}
         highlights={revealGlobe?.highlights ?? null}
         markers={revealGlobe?.markers ?? null}
+        poles={settings.showPoles}
+        rotationMode={settings.globeMode}
         focus={focus}
         focusAltitude={phase === "reveal" ? 2.3 : undefined}
         crosshair={isFind && isTouchDevice && !answered}
@@ -130,13 +134,14 @@ export default function MultiplayerView({
       {phase === "home" && <JoinScreen initialCode={initialCode} />}
 
       {phase === "connecting" && (
-        <div className="absolute inset-0 z-10 flex items-center justify-center p-4">
-          <div className="rounded-2xl border border-slate-700/60 bg-slate-900/92 p-6 text-center shadow-2xl backdrop-blur">
-            <p className="animate-pulse text-slate-200">Connecting to room {code}…</p>
-            {error && <p className="mt-2 text-sm text-amber-400">{error}</p>}
+        <div className="anim-fade-in absolute inset-0 z-10 flex items-center justify-center p-4">
+          <div className="glass-card anim-scale-in flex flex-col items-center rounded-3xl p-6 text-center">
+            <span className="mb-3 h-8 w-8 animate-spin rounded-full border-[3px] border-white/15 border-t-sky-400" aria-hidden />
+            <p className="text-slate-200">Connecting to room {code}…</p>
+            {error && <p className="mt-2 text-sm text-amber-300">{error}</p>}
             <button
               onClick={leave}
-              className="mt-4 rounded-lg border border-slate-600 px-4 py-2 text-sm font-semibold text-slate-300 hover:bg-slate-800"
+              className="btn btn-ghost mt-4 rounded-xl px-4 py-2 text-sm"
             >
               Cancel
             </button>

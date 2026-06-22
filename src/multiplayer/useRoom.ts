@@ -13,6 +13,7 @@ import {
   type SeqItem,
   type ServerMsg,
 } from "./protocol";
+import { useAuth } from "../auth/useAuth";
 
 /**
  * Where the realtime server lives. In production the same Node server serves the
@@ -59,7 +60,7 @@ export function loadSavedName(): string {
   return localStorage.getItem(NAME_KEY) ?? "";
 }
 
-/** Unambiguous 4-char room codes (no 0/O/1/I) — easy to read aloud to family. */
+/** Unambiguous 4-char room codes (no 0/O/1/I) — easy to read aloud to a friend. */
 const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
 function makeCode(): string {
   let s = "";
@@ -107,6 +108,11 @@ interface RoomState {
   finalLeaderboard: PlayerInfo[] | null;
   answeredThisRound: boolean;
   lobbyDifficulty: Difficulty;
+  /** XP this player earned in the last completed game (for the post-game report),
+   *  accumulated client-side from reveals with the shared formula. */
+  gameXp: number;
+  /** lifetime XP snapshot at the last game's start (the report animates from it). */
+  xpBeforeGame: number;
 
   setName: (name: string) => void;
   setLobbyDifficulty: (d: Difficulty) => void;
@@ -121,6 +127,8 @@ interface RoomState {
 
 // The socket lives outside the store (non-reactive, single instance).
 let socket: ReconnectingWebSocket | null = null;
+
+const mpDelay = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
 function buildSequence(countries: Country[], difficulty: Difficulty): SeqItem[] {
   return generateRound(countries, TOTAL_ROUNDS, difficulty).map((q) => ({
@@ -142,6 +150,24 @@ export const useRoom = create<RoomState>((set, get) => {
     }
   }
 
+  // The report's gained XP is the SERVER's delta (the attempts log is the source
+  // of truth — robust to reconnects / mid-game joins / missed reveals). The MP
+  // write is fire-and-forget, so poll the refreshed total a few times until it
+  // reflects this game, then expose the delta for GameOver to animate.
+  async function reconcileGameXp(before: number) {
+    const a = useAuth.getState();
+    if (!a.user || a.stats == null) return; // need an account + a known baseline
+    for (let i = 0; i < 6; i++) {
+      await useAuth.getState().refreshStats();
+      const now = useAuth.getState().stats?.xp ?? before;
+      if (now > before) {
+        set({ gameXp: now - before });
+        return;
+      }
+      if (i < 5) await mpDelay(400);
+    }
+  }
+
   function handle(msg: ServerMsg) {
     switch (msg.t) {
       case "state":
@@ -149,6 +175,8 @@ export const useRoom = create<RoomState>((set, get) => {
         set({ room: msg.room, connecting: false, error: null });
         break;
       case "question":
+        // A new game starting clears any previous game's XP report.
+        if (msg.round === 0) set({ gameXp: 0, xpBeforeGame: 0 });
         set((s) => ({
           room: s.room ? { ...s.room, status: "question" } : s.room,
           question: {
@@ -182,7 +210,13 @@ export const useRoom = create<RoomState>((set, get) => {
           error: null,
         }));
         break;
-      case "gameover":
+      case "gameover": {
+        // `stats.xp` here is still the PRE-game total (this game's write is
+        // fire-and-forget and hasn't been pulled yet) — capture it as the report's
+        // "from", then reconcile to the authoritative new total. Deriving the gain
+        // from the server (not the client's reveal stream) keeps it correct through
+        // reconnects / mid-game joins / missed reveals.
+        const before = useAuth.getState().stats?.xp ?? 0;
         set((s) => ({
           room: s.room ? { ...s.room, status: "gameover" } : s.room,
           finalLeaderboard: msg.leaderboard,
@@ -190,8 +224,14 @@ export const useRoom = create<RoomState>((set, get) => {
           reveal: null,
           connecting: false,
           error: null,
+          xpBeforeGame: before,
+          gameXp: 0,
         }));
+        // Wins + XP changed for logged-in players; the board's next open refetches.
+        useAuth.getState().invalidateLeaderboard();
+        void reconcileGameXp(before);
         break;
+      }
       case "error":
         set({ error: msg.message });
         break;
@@ -244,6 +284,8 @@ export const useRoom = create<RoomState>((set, get) => {
     finalLeaderboard: null,
     answeredThisRound: false,
     lobbyDifficulty: "medium",
+    gameXp: 0,
+    xpBeforeGame: 0,
 
     setName: (name) => {
       set({ name });
@@ -298,6 +340,8 @@ export const useRoom = create<RoomState>((set, get) => {
         reveal: null,
         finalLeaderboard: null,
         answeredThisRound: false,
+        gameXp: 0,
+        xpBeforeGame: 0,
       });
     },
   };

@@ -13,6 +13,7 @@ import {
   type Data,
   type AttemptInput,
   type MpResultInput,
+  type UserSettings,
   toPublicUser,
   UsernameTakenError,
 } from "./db";
@@ -24,6 +25,7 @@ import {
   sessionCookie,
   clearSessionCookie,
   validateUsername,
+  validateDisplayName,
   validatePassword,
   createRateLimiter,
 } from "./auth";
@@ -141,7 +143,8 @@ export async function handleApi(
         });
         res.setHeader("set-cookie", sessionCookie(signSession(user.id), { secure }));
         const stats = await data.getProfileStats(user.id);
-        return sendJson(res, 200, { user: toPublicUser(user), stats }), true;
+        const settings = await data.getSettings(user.id);
+        return sendJson(res, 200, { user: toPublicUser(user), stats, settings }), true;
       } catch (e) {
         if (e instanceof UsernameTakenError) return sendJson(res, 409, { error: e.message }), true;
         throw e;
@@ -161,7 +164,8 @@ export async function handleApi(
       }
       res.setHeader("set-cookie", sessionCookie(signSession(user.id), { secure }));
       const stats = await data.getProfileStats(user.id);
-      return sendJson(res, 200, { user: toPublicUser(user), stats }), true;
+      const settings = await data.getSettings(user.id);
+      return sendJson(res, 200, { user: toPublicUser(user), stats, settings }), true;
     }
 
     // ---- POST /api/logout ----
@@ -179,7 +183,49 @@ export async function handleApi(
       // Sliding renewal: refresh the cookie so active players never expire.
       res.setHeader("set-cookie", sessionCookie(signSession(user.id), { secure }));
       const stats = await data.getProfileStats(user.id);
-      return sendJson(res, 200, { user: toPublicUser(user), stats }), true;
+      const settings = await data.getSettings(user.id);
+      return sendJson(res, 200, { user: toPublicUser(user), stats, settings }), true;
+    }
+
+    // ---- GET /api/settings ----  (authed)
+    if (path === "/api/settings" && method === "GET") {
+      const userId = readSession(req);
+      if (!userId) return sendJson(res, 401, { error: "Not logged in" }), true;
+      const settings = await data.getSettings(userId);
+      return sendJson(res, 200, { settings }), true;
+    }
+
+    // ---- POST /api/settings ----  (authed: update globe preferences)
+    if (path === "/api/settings" && (method === "POST" || method === "PUT")) {
+      const userId = readSession(req);
+      if (!userId) return sendJson(res, 401, { error: "Not logged in" }), true;
+      const body = (await readBody(req)) as Record<string, unknown>;
+      const partial: Partial<UserSettings> = {};
+      if (body.globeMode === "guided" || body.globeMode === "free") partial.globeMode = body.globeMode;
+      if (typeof body.showPoles === "boolean") partial.showPoles = body.showPoles;
+      const settings = await data.updateSettings(userId, partial);
+      // Active authed action → slide the session like /api/me does.
+      res.setHeader("set-cookie", sessionCookie(signSession(userId), { secure }));
+      return sendJson(res, 200, { settings }), true;
+    }
+
+    // ---- POST /api/account/name ----  (authed: change display name only)
+    if (path === "/api/account/name" && method === "POST") {
+      const userId = readSession(req);
+      if (!userId) return sendJson(res, 401, { error: "Not logged in" }), true;
+      // Authenticated action → rate-limit per account (a UUID key never collides
+      // with the IP-keyed login/signup budget), so a shared NAT can't starve it.
+      if (!authLimiter(userId))
+        return sendJson(res, 429, { error: "Too many attempts — try again soon" }), true;
+      const body = (await readBody(req)) as Record<string, unknown>;
+      const displayName = asString(body.displayName)?.trim() ?? "";
+      const nErr = validateDisplayName(displayName);
+      if (nErr) return sendJson(res, 400, { error: nErr }), true;
+      const updated = await data.updateDisplayName(userId, displayName);
+      if (!updated) return sendJson(res, 404, { error: "Account not found" }), true;
+      // Active authed action → slide the session like /api/me does.
+      res.setHeader("set-cookie", sessionCookie(signSession(updated.id), { secure }));
+      return sendJson(res, 200, { user: toPublicUser(updated) }), true;
     }
 
     // ---- POST /api/solo/result ----  (authed)
@@ -220,7 +266,10 @@ export async function handleApi(
 
     // ---- GET /api/leaderboard ----
     if (path === "/api/leaderboard" && method === "GET") {
-      const n = Number(url.searchParams.get("limit"));
+      // NB: a missing param is `null` → Number(null) === 0 (finite!), so guard on
+      // the raw string, not Number.isFinite, or the default would collapse to 1.
+      const raw = url.searchParams.get("limit");
+      const n = raw == null ? NaN : Number(raw);
       const limit = Number.isFinite(n) ? Math.min(100, Math.max(1, n)) : 20;
       const leaderboard = await data.getLeaderboard(limit);
       return sendJson(res, 200, { leaderboard }), true;

@@ -31,6 +31,9 @@ export async function recordSoloRound(payload: {
     if (res.ok) {
       const json = await res.json();
       if (json.stats) useAuth.getState().setStats(json.stats as AuthStats);
+      // The round may have moved the global board (best-solo / placement); the
+      // write is committed now, so mark the cache stale for the next popup open.
+      useAuth.getState().invalidateLeaderboard();
     }
   } catch {
     /* offline — the local best score still persists via the game store */

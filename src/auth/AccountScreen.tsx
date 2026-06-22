@@ -1,6 +1,12 @@
-import { useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { useAuth } from "./useAuth";
 import { useKeyboardInset } from "../lib/useKeyboardInset";
+import SegmentedToggle, { type SegOption } from "../components/SegmentedToggle";
+
+const AUTH_TABS: SegOption<"signup" | "login">[] = [
+  { value: "signup", label: "Sign up" },
+  { value: "login", label: "Log in" },
+];
 
 /**
  * One-minute account UI: pick a username + password, or log in. Used both as a
@@ -28,6 +34,8 @@ export default function AccountScreen({
   /** if provided, shows a dismiss (×) control (modal flow) */
   onClose?: () => void;
 }) {
+  const usernameId = useId();
+  const passwordId = useId();
   const [tab, setTab] = useState<"signup" | "login">(initialTab);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -38,6 +46,11 @@ export default function AccountScreen({
   const login = useAuth((s) => s.login);
   const clearError = useAuth((s) => s.clearError);
   const inset = useKeyboardInset();
+
+  // The error/busy fields are shared across all auth actions (login, signup,
+  // rename). Start every fresh auth screen clean so a leftover error from a
+  // prior action (e.g. a failed rename, then logout) never shows up here.
+  useEffect(() => clearError(), [clearError]);
 
   const canSubmit = username.trim().length >= 3 && password.length >= 6 && !busy;
 
@@ -55,21 +68,25 @@ export default function AccountScreen({
 
   return (
     <div
-      className="absolute inset-0 z-50 flex items-center justify-center p-4"
+      className="scrim anim-fade-in absolute inset-0 z-50 flex items-center justify-center p-4"
       style={{ paddingBottom: inset || undefined }}
+      onClick={(e) => {
+        // Tap the dimmed backdrop (not the card) to dismiss.
+        if (e.target === e.currentTarget) onClose?.();
+      }}
     >
-      <div className="relative w-full max-w-md rounded-2xl border border-slate-700/60 bg-slate-900/92 p-6 shadow-2xl backdrop-blur">
+      <div className="glass-card anim-scale-in relative w-full max-w-md rounded-3xl p-6">
         {onClose && (
           <button
             onClick={onClose}
             aria-label="Close"
-            className="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full text-slate-400 hover:bg-slate-800 hover:text-slate-200"
+            className="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full text-slate-400 transition hover:bg-white/10 hover:text-slate-100"
           >
             ✕
           </button>
         )}
 
-        <h2 className="text-center text-2xl font-bold">
+        <h2 className="text-center text-2xl font-bold tracking-tight">
           {title ?? (tab === "signup" ? "Create your account" : "Welcome back")}
         </h2>
         <p className="mt-1 text-center text-sm text-slate-400">
@@ -77,25 +94,20 @@ export default function AccountScreen({
         </p>
 
         {/* Tab toggle */}
-        <div className="mt-5 grid grid-cols-2 gap-1 rounded-lg bg-slate-800/70 p-1 text-sm font-semibold">
-          <button
-            onClick={() => switchTab("signup")}
-            className={`rounded-md py-2 transition ${tab === "signup" ? "bg-sky-500 text-slate-950" : "text-slate-300"}`}
-          >
-            Sign up
-          </button>
-          <button
-            onClick={() => switchTab("login")}
-            className={`rounded-md py-2 transition ${tab === "login" ? "bg-sky-500 text-slate-950" : "text-slate-300"}`}
-          >
-            Log in
-          </button>
+        <div className="mt-5">
+          <SegmentedToggle
+            options={AUTH_TABS}
+            value={tab}
+            onChange={switchTab}
+            shape="segment"
+          />
         </div>
 
-        <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-slate-400">
+        <label htmlFor={usernameId} className="mt-4 block text-xs font-semibold uppercase tracking-wide text-slate-400">
           Username
         </label>
         <input
+          id={usernameId}
           value={username}
           onChange={(e) => setUsername(e.target.value)}
           placeholder="e.g. globe_master"
@@ -105,13 +117,14 @@ export default function AccountScreen({
           spellCheck={false}
           autoComplete="username"
           enterKeyHint="next"
-          className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-3 text-base text-slate-100 outline-none focus:border-sky-400"
+          className="field mt-1 px-3 py-3 text-base"
         />
 
-        <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-slate-400">
+        <label htmlFor={passwordId} className="mt-4 block text-xs font-semibold uppercase tracking-wide text-slate-400">
           Password
         </label>
         <input
+          id={passwordId}
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           placeholder="At least 6 characters"
@@ -124,21 +137,25 @@ export default function AccountScreen({
           onKeyDown={(e) => {
             if (e.key === "Enter") void submit();
           }}
-          className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-3 text-base text-slate-100 outline-none focus:border-sky-400"
+          className="field mt-1 px-3 py-3 text-base"
         />
 
-        {error && <p className="mt-3 text-center text-sm text-amber-400">{error}</p>}
+        {error && (
+          <p className="anim-fade-in mt-3 rounded-lg border border-amber-400/30 bg-amber-500/10 px-3 py-2 text-center text-sm text-amber-300">
+            {error}
+          </p>
+        )}
 
         <button
           disabled={!canSubmit}
           onClick={() => void submit()}
-          className="mt-4 w-full rounded-lg bg-sky-500 px-4 py-3 font-semibold text-slate-950 transition hover:bg-sky-400 disabled:opacity-40"
+          className="btn btn-primary mt-5 w-full rounded-xl px-4 py-3"
         >
           {busy ? "…" : tab === "signup" ? "Create account" : "Log in"}
         </button>
 
         {tab === "signup" && (
-          <p className="mt-2 text-center text-xs text-slate-500">
+          <p className="mt-2.5 text-center text-xs text-slate-500">
             No email needed — just remember your password (there's no reset yet).
           </p>
         )}
@@ -146,7 +163,7 @@ export default function AccountScreen({
         {onGuest && (
           <button
             onClick={onGuest}
-            className="mt-3 w-full rounded-lg border border-slate-600 px-4 py-2.5 text-sm font-semibold text-slate-200 hover:bg-slate-800"
+            className="btn btn-ghost mt-3 w-full rounded-xl px-4 py-2.5 text-sm"
           >
             Continue as guest
           </button>

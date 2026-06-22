@@ -88,7 +88,7 @@ try {
   });
   await page.reload({ waitUntil: "networkidle" });
   await page.getByRole("button", { name: new RegExp(username) }).click();
-  await page.getByText("Family multiplayer").waitFor({ timeout: 10000 });
+  await page.getByText("Online multiplayer").waitFor({ timeout: 10000 });
   const profileText = await page.locator("body").innerText();
   if (!profileText.includes("50%")) throw new Error("profile missing avg accuracy (50%)");
   log("solo round recorded → profile shows 50% accuracy ✓");

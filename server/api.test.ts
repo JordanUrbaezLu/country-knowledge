@@ -145,6 +145,8 @@ describe("auth API", () => {
     const me = await call(data, { path: "/api/me", cookie });
     expect(me.json.stats.solo.bestScore).toBe(1);
     expect(me.json.stats.perMode.find((m: { mode: string }) => m.mode === "locate").accuracy).toBe(1);
+    // XP for the round: correct medium (2+10)·1.5 = 18, wrong medium (2)·1.5 = 3.
+    expect(me.json.stats.xp).toBe(21);
   });
 
   it("requires a session to post solo results", async () => {
@@ -152,11 +154,53 @@ describe("auth API", () => {
     expect(res.status).toBe(401);
   });
 
-  it("serves the leaderboard", async () => {
-    await call(data, { method: "POST", path: "/api/signup", body: { username: "Cee", password: "secret1" } });
+  it("changes the display name (keeping username) and reflects it in /api/me", async () => {
+    const signup = await call(data, { method: "POST", path: "/api/signup", body: { username: "Zoe", password: "secret1" } });
+    const cookie = cookieFrom(signup.headers);
+
+    const rename = await call(data, { method: "POST", path: "/api/account/name", cookie, body: { displayName: "Zo the Great" } });
+    expect(rename.status).toBe(200);
+    expect(rename.json.user).toMatchObject({ username: "Zoe", displayName: "Zo the Great" });
+    expect(rename.json.user.id).toBe(signup.json.user.id); // stats id unchanged
+
+    const me = await call(data, { path: "/api/me", cookie });
+    expect(me.json.user.displayName).toBe("Zo the Great");
+    expect(me.json.user.username).toBe("Zoe");
+  });
+
+  it("rejects a rename when logged out or invalid", async () => {
+    const out = await call(data, { method: "POST", path: "/api/account/name", body: { displayName: "Nope" } });
+    expect(out.status).toBe(401);
+
+    const signup = await call(data, { method: "POST", path: "/api/signup", body: { username: "Yan", password: "secret1" } });
+    const cookie = cookieFrom(signup.headers);
+    const blank = await call(data, { method: "POST", path: "/api/account/name", cookie, body: { displayName: "  " } });
+    expect(blank.status).toBe(400);
+    const tooLong = await call(data, { method: "POST", path: "/api/account/name", cookie, body: { displayName: "x".repeat(25) } });
+    expect(tooLong.status).toBe(400);
+    const angle = await call(data, { method: "POST", path: "/api/account/name", cookie, body: { displayName: "<script>" } });
+    expect(angle.status).toBe(400);
+  });
+
+  it("serves the leaderboard ranked by XP", async () => {
+    const cee = await call(data, { method: "POST", path: "/api/signup", body: { username: "Cee", password: "secret1" } });
+    await call(data, { method: "POST", path: "/api/signup", body: { username: "Dot", password: "secret1" } });
+    // Cee earns XP from a solo round; Dot has none.
+    await call(data, {
+      method: "POST",
+      path: "/api/solo/result",
+      cookie: cookieFrom(cee.headers),
+      body: { gameId: "g1", difficulty: "hard", attempts: [{ mode: "locate", countryId: "FRA", isCorrect: true }] },
+    });
     const board = await call(data, { path: "/api/leaderboard" });
     expect(board.status).toBe(200);
-    expect(board.json.leaderboard.some((e: { username: string }) => e.username === "Cee")).toBe(true);
+    const entry = (name: string) =>
+      board.json.leaderboard.find((e: { username: string }) => e.username === name);
+    expect(entry("Cee").xp).toBe(24); // correct hard answer: (2 + 10)·2
+    expect(entry("Dot").xp).toBe(0);
+    // Ranked by XP — Cee is ahead of Dot.
+    const names = board.json.leaderboard.map((e: { username: string }) => e.username);
+    expect(names.indexOf("Cee")).toBeLessThan(names.indexOf("Dot"));
   });
 
   it("returns the user's committed insight, gated by session", async () => {
@@ -179,5 +223,27 @@ describe("auth API", () => {
     // missing file → null insight (not an error)
     const none = await call(data, { path: "/api/insights", cookie, insightsPath: join(dir, "missing.json") });
     expect(none.json.insight).toBeNull();
+  });
+
+  it("returns globe settings, updates them, and reflects in /api/me", async () => {
+    const signup = await call(data, { method: "POST", path: "/api/signup", body: { username: "Settings", password: "secret1" } });
+    const cookie = cookieFrom(signup.headers);
+    expect(signup.json.settings).toEqual({ globeMode: "guided", showPoles: true });
+
+    const got = await call(data, { path: "/api/settings", cookie });
+    expect(got.json.settings).toEqual({ globeMode: "guided", showPoles: true });
+
+    const upd = await call(data, { method: "POST", path: "/api/settings", cookie, body: { globeMode: "free", showPoles: false } });
+    expect(upd.status).toBe(200);
+    expect(upd.json.settings).toEqual({ globeMode: "free", showPoles: false });
+
+    const me = await call(data, { path: "/api/me", cookie });
+    expect(me.json.settings).toEqual({ globeMode: "free", showPoles: false });
+
+    // invalid values are ignored (current kept); logged out is rejected.
+    const bad = await call(data, { method: "POST", path: "/api/settings", cookie, body: { globeMode: "upside-down" } });
+    expect(bad.json.settings).toEqual({ globeMode: "free", showPoles: false });
+    const out = await call(data, { method: "POST", path: "/api/settings", body: { globeMode: "guided" } });
+    expect(out.status).toBe(401);
   });
 });

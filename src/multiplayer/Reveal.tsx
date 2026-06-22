@@ -36,19 +36,19 @@ export default function Reveal({ answer }: { answer: Country | null }) {
 
   return (
     <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex justify-center px-3 pb-safe pt-2 sm:p-5">
-      <div className="pointer-events-auto flex max-h-[68vh] w-full max-w-md flex-col rounded-2xl border border-slate-700/60 bg-slate-900/94 p-4 shadow-2xl backdrop-blur sm:max-h-[80vh]">
+      <div className="glass-card anim-slide-up pointer-events-auto flex max-h-[68vh] w-full max-w-md flex-col rounded-3xl p-4 sm:max-h-[80vh]">
         {/* Answer */}
-        <div className="flex items-center justify-center gap-2">
-          {flag && <img src={flag} alt="" className="h-7 rounded border border-slate-600" />}
+        <div className="anim-pop flex items-center justify-center gap-2">
+          {flag && <img src={flag} alt="" className="h-7 rounded border border-white/15 shadow-md shadow-black/40" />}
           <p className="text-center text-lg font-bold">
-            It was <span className="text-amber-300">{answer?.name ?? "—"}</span>
+            It was <span className="text-amber-300 drop-shadow-[0_1px_8px_rgba(252,211,77,0.3)]">{answer?.name ?? "—"}</span>
           </p>
         </div>
 
         <div className="mt-3 flex-1 overflow-y-auto pr-1">
           {/* This round's picks */}
           <p className="mb-1.5 text-xs uppercase tracking-wide text-slate-400">This round</p>
-          <ul className="space-y-1">
+          <ul className="stagger space-y-1">
             {results.map((r) => (
               <RoundRow key={r.id} r={r} colorIndex={colorOf(r.id)} />
             ))}
@@ -65,7 +65,7 @@ export default function Reveal({ answer }: { answer: Country | null }) {
           {isHost ? (
             <button
               onClick={() => skip({ expect: "reveal", round: reveal.round })}
-              className="w-full rounded-lg bg-sky-500 px-4 py-2.5 font-semibold text-slate-950 hover:bg-sky-400"
+              className="btn btn-primary w-full rounded-xl px-4 py-2.5"
             >
               {isLast ? "See final results →" : "Next round →"} {secs > 0 ? `(${secs})` : ""}
             </button>
@@ -85,7 +85,7 @@ function RoundRow({ r, colorIndex }: { r: RoundResult; colorIndex: number }) {
   const time = r.elapsedMs != null ? `${(r.elapsedMs / 1000).toFixed(1)}s` : null;
   const partial = r.accuracy > 0 && r.accuracy < 1;
   return (
-    <li className="flex items-center gap-2 rounded-lg bg-slate-800/50 px-3 py-1.5 text-sm">
+    <li className="glass-soft flex items-center gap-2 rounded-xl px-3 py-1.5 text-sm">
       <span
         className="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
         style={{ background: c.hex, boxShadow: `0 0 6px ${c.hex}` }}

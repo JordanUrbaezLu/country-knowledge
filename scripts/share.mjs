@@ -1,8 +1,8 @@
 /**
- * One command to host a game for family anywhere: starts the game server on
+ * One command to host a game for friends anywhere: starts the game server on
  * this computer and opens a public Cloudflare tunnel, then prints the link to
  * share. No accounts, no cloud. The tunnel proxies both HTTP and WebSockets, so
- * family on cellular open the link and play. Ctrl-C stops everything.
+ * players on cellular open the link and play. Ctrl-C stops everything.
  *
  * Run via `npm run share` (which builds first), or `node scripts/share.mjs`.
  */
@@ -108,9 +108,9 @@ async function main() {
 
   const line = "═".repeat(64);
   console.log(`\n${line}`);
-  console.log("  ✅  Send this link to your family — it works on cellular:\n");
+  console.log("  ✅  Send this link to your friends — it works on cellular:\n");
   console.log(`        ${url}\n`);
-  console.log("  They open it → tap Family → join your room.");
+  console.log("  They open it → tap Online → join your room.");
   console.log("  Keep this window open while you play.  Press Ctrl-C to stop.");
   console.log(`${line}\n`);
 }

@@ -14,10 +14,10 @@ world, then test yourself with a 10-question quiz.
   2. 🏳️ **Flag → identify** — name the country from its flag.
   3. 🌍 **Name → find** — click the named country on the globe.
   Running score, typo tolerance, and a best-score saved to `localStorage`.
-- **Difficulty** — **Easy / Medium / Hard**, applied to both Solo and Family. Difficulty changes the
+- **Difficulty** — **Easy / Medium / Hard**, applied to both Solo and Online. Difficulty changes the
   pool of countries by "fame" (a population + GDP blend): Easy draws from the ~50 most prominent
   nations, Medium ~120, Hard the whole world including obscure micro-states.
-- **Family mode (online multiplayer)** — GeoGuessr-style. Create a room, share the link, everyone
+- **Online mode (multiplayer)** — GeoGuessr-style. Create a room, share the link, everyone
   enters a name, and you compete in real time. See the next section.
 - **Mobile crosshair** — on touch devices a centre-screen reticle continuously names whatever
   country (or state, once one is selected) sits beneath it; tapping the pill selects it, the
@@ -25,9 +25,9 @@ world, then test yourself with a 10-question quiz.
   **Select this country** (names stay hidden). Selecting a country focuses it under the
   reticle, and the quiz input lifts above the iOS keyboard.
 
-## Multiplayer (Family mode)
+## Multiplayer (Online mode)
 
-Switch to **Family** to play together in real time — inspired by GeoGuessr, but country-based.
+Switch to **Online** to play together in real time — inspired by GeoGuessr, but country-based.
 
 - **Create a room** → get a short, say-out-loud code (no `0/O/1/I`) and a **share link**. Anyone who
   opens the link types a name and they're in — no sign-up, no accounts.
@@ -38,7 +38,7 @@ Switch to **Family** to play together in real time — inspired by GeoGuessr, bu
   guess lights up in their own color** with their name floating on it — typed guesses are resolved
   back to a country so they light up too. You can literally see who was a country (or a continent)
   off. A results strip shows each pick, ✓/✗, points and time, then the running leaderboard.
-- **Reliable for family on phones.** Lock your screen, lose Wi-Fi, or refresh — you **rejoin the same
+- **Reliable on phones.** Lock your screen, lose Wi-Fi, or refresh — you **rejoin the same
   game and keep your score and color** (identity is a `localStorage` id). The game keeps running if
   the host closes their tab (host role hands off automatically).
 
@@ -49,9 +49,9 @@ progression; it's *dataset-free* (the host's browser generates the question sequ
 nothing on disk. All the game rules live in a transport-agnostic engine (`src/multiplayer/roomGame.ts`).
 See [AGENTS.md](AGENTS.md) for the design.
 
-### Playing with family (you host, they join the link)
+### Playing with friends (you host, they join the link)
 
-Your computer runs the game; family open a link on their phones. Two cases:
+Your computer runs the game; friends open a link on their phones. Two cases:
 
 **Same Wi-Fi (everyone in the house):**
 
@@ -59,16 +59,16 @@ Your computer runs the game; family open a link on their phones. Two cases:
 npm run play        # builds + starts the server on :1999, prints a "Same Wi-Fi" URL
 ```
 
-Share the `http://192.168.x.x:1999` URL it prints; everyone opens it → **Family** → create a room.
+Share the `http://192.168.x.x:1999` URL it prints; everyone opens it → **Online** → create a room.
 
-**Family on cellular / different networks (most common):** you need a public link via a tunnel.
+**Friends on cellular / different networks (most common):** you need a public link via a tunnel.
 
 ```bash
 npm run share       # builds, starts the server, AND opens a public tunnel — prints an https URL
 ```
 
 Share the printed `https://….trycloudflare.com` link. They open it on their phones (cellular is fine),
-pick **Family**, and play. Keep that terminal open while you play; `Ctrl-C` ends it.
+pick **Online**, and play. Keep that terminal open while you play; `Ctrl-C` ends it.
 
 > `npm run share` bundles Cloudflare's tunnel (the [`cloudflared`](https://www.npmjs.com/package/cloudflared)
 > package; the binary downloads once on first run) — no install, no account. Both HTTP and WebSocket
@@ -115,7 +115,7 @@ zero sign-up). Turn them on by giving the server a Postgres database and a sessi
    - `SESSION_SECRET` — any long random value: `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`
 3. Deploy. The server **auto-creates its tables on boot** and the account chip appears in the app.
    Players sign up with just a username + password (no email), or keep playing as guests. Every solo
-   and Family answer is recorded per account, powering the profile stats + global leaderboard.
+   and online answer is recorded per account, powering the profile stats + global leaderboard.
 
 **Personalized insights** (the "here's how you play" message) are generated **locally, on demand** —
 no AI runs on the server and no API key is ever deployed:
@@ -153,7 +153,7 @@ Requires **Node ≥ 20.19** (Vite 8).
 ```bash
 npm install
 npm run play         # ⭐ host a game: build + serve app + multiplayer on :1999
-npm run share        # ⭐ same, but also opens a public tunnel link (family on cellular)
+npm run share        # ⭐ same, but also opens a public tunnel link (friends on cellular)
 npm run dev          # Vite only — Explore + Solo (http://localhost:5173)
 npm run dev:mp       # Vite + game server together (hot reload) for development
 npm run build        # typecheck + production build (the SPA)

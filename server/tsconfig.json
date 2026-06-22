@@ -22,6 +22,7 @@
     "mpStats.ts",
     "insights.ts",
     "../src/multiplayer/roomGame.ts",
-    "../src/multiplayer/protocol.ts"
+    "../src/multiplayer/protocol.ts",
+    "../src/game/leveling.ts"
   ]
 }

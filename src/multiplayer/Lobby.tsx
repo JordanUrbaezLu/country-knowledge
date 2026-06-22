@@ -38,24 +38,27 @@ export default function Lobby({ countries }: { countries: Country[] }) {
   };
 
   return (
-    <div className="absolute inset-0 z-10 flex items-end justify-center p-4 pb-safe sm:items-center">
-      <div className="w-full max-w-md rounded-2xl border border-slate-700/60 bg-slate-900/92 p-5 shadow-2xl backdrop-blur sm:p-6">
+    <div className="anim-fade-in absolute inset-0 z-10 flex items-end justify-center p-4 pb-safe sm:items-center">
+      <div className="glass-card anim-slide-up w-full max-w-md rounded-3xl p-5 sm:p-6">
         <div className="flex items-center justify-between">
-          <h2 className="text-xl font-bold">Game lobby</h2>
-          <button onClick={leave} className="text-sm text-slate-400 hover:text-slate-200">
+          <h2 className="text-xl font-bold tracking-tight">Game lobby</h2>
+          <button onClick={leave} className="rounded-lg px-2 py-1 text-sm text-slate-400 transition hover:bg-white/10 hover:text-slate-200">
             Leave
           </button>
         </div>
 
         {/* Invite */}
-        <div className="mt-3 rounded-xl border border-slate-700/60 bg-slate-800/50 p-3 text-center">
+        <div className="glass-soft mt-3 rounded-2xl p-3.5 text-center">
           <p className="text-xs uppercase tracking-wide text-slate-400">Room code</p>
-          <p data-testid="room-code" className="text-3xl font-black tracking-[0.3em] text-sky-300">
+          <p
+            data-testid="room-code"
+            className="bg-linear-to-r from-sky-300 to-indigo-300 bg-clip-text text-4xl font-black tracking-[0.3em] text-transparent drop-shadow-[0_2px_12px_rgba(56,189,248,0.25)]"
+          >
             {code}
           </p>
           <button
             onClick={share}
-            className="mt-2 w-full rounded-lg bg-sky-500 px-4 py-2.5 text-sm font-semibold text-slate-950 hover:bg-sky-400"
+            className="btn btn-primary mt-2.5 w-full rounded-xl px-4 py-2.5 text-sm"
           >
             {copied ? "✓ Link copied!" : "📋 Copy invite link"}
           </button>
@@ -91,7 +94,7 @@ export default function Lobby({ countries }: { countries: Country[] }) {
         {isHost ? (
           <button
             onClick={() => startGame(countries)}
-            className="mt-4 w-full rounded-lg bg-emerald-500 px-4 py-3 font-semibold text-slate-950 hover:bg-emerald-400"
+            className="btn btn-success mt-4 w-full rounded-xl px-4 py-3"
           >
             Start game →
           </button>

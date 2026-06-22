@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { useRoom } from "./useRoom";
 import { useAuth } from "../auth/useAuth";
 import AccountScreen from "../auth/AccountScreen";
@@ -17,39 +17,50 @@ export default function JoinScreen({ initialCode }: { initialCode?: string | nul
 
   const user = useAuth((s) => s.user);
 
+  const nameId = useId();
+  const codeId = useId();
   const [name, setName] = useState(user?.displayName ?? savedName);
   const [code, setCode] = useState((initialCode ?? "").toUpperCase());
   const [mode, setMode] = useState<"home" | "join">(initialCode ? "join" : "home");
   const [showLogin, setShowLogin] = useState(false);
 
-  // Logging in (here or via the account chip) auto-fills the account name.
+  // Keep the name in sync with auth: logging in (here or via the account chip)
+  // fills in the account name; logging out reverts to the saved guest name
+  // rather than stranding the ex-account name in the now-editable field.
   useEffect(() => {
-    if (user?.displayName) setName(user.displayName);
-  }, [user]);
+    setName(user?.displayName ?? savedName);
+  }, [user, savedName]);
 
+  // When logged in, you play online *as your account* — the name is your userid,
+  // so it's locked to it. Changing it is a separate account-rename flow (later).
+  const locked = !!user;
   const nameOk = name.trim().length > 0;
   const codeOk = code.trim().length === 4;
 
   return (
-    <div className="absolute inset-0 z-10 flex items-center justify-center p-4">
-      <div className="w-full max-w-md rounded-2xl border border-slate-700/60 bg-slate-900/92 p-6 shadow-2xl backdrop-blur">
-        <h2 className="text-center text-2xl font-bold">Play online</h2>
+    <div className="anim-fade-in absolute inset-0 z-10 flex items-center justify-center p-4">
+      <div className="glass-card anim-fade-up w-full max-w-md rounded-3xl p-6">
+        <h2 className="text-center text-2xl font-bold tracking-tight">Play online</h2>
         <p className="mt-1 text-center text-sm text-slate-400">
           {mode === "join" && initialCode
             ? `You've been invited to room ${code}`
             : "Create a room and share the link — no sign-up."}
         </p>
 
-        <label className="mt-5 block text-xs font-semibold uppercase tracking-wide text-slate-400">
+        <label htmlFor={nameId} className="mt-5 block text-xs font-semibold uppercase tracking-wide text-slate-400">
           Your name
         </label>
         <input
+          id={nameId}
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="e.g. John"
           maxLength={24}
           autoComplete="off"
-          className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2.5 text-slate-100 outline-none focus:border-sky-400"
+          disabled={locked}
+          readOnly={locked}
+          aria-describedby={locked ? "name-locked-hint" : undefined}
+          className="field mt-1 px-3 py-2.5 disabled:cursor-not-allowed disabled:text-slate-400 disabled:opacity-70"
           onKeyDown={(e) => {
             if (e.key === "Enter" && nameOk) {
               if (mode === "join" && codeOk) joinRoom(code, name);
@@ -57,47 +68,53 @@ export default function JoinScreen({ initialCode }: { initialCode?: string | nul
             }
           }}
         />
+        {locked && (
+          <p id="name-locked-hint" className="mt-1 flex items-center gap-1 text-xs text-slate-500">
+            <span aria-hidden>🔒</span> You're playing as your account name.
+          </p>
+        )}
 
         {mode === "home" ? (
           <>
             <button
               disabled={!nameOk || connecting}
               onClick={() => createRoom(name)}
-              className="mt-4 w-full rounded-lg bg-sky-500 px-4 py-3 font-semibold text-slate-950 transition hover:bg-sky-400 disabled:opacity-40"
+              className="btn btn-primary mt-4 w-full rounded-xl px-4 py-3"
             >
               {connecting ? "Creating…" : "Create a room"}
             </button>
             <button
               onClick={() => setMode("join")}
-              className="mt-2 w-full rounded-lg border border-slate-600 px-4 py-2.5 text-sm font-semibold text-slate-200 hover:bg-slate-800"
+              className="btn btn-ghost mt-2.5 w-full rounded-xl px-4 py-2.5 text-sm"
             >
               I have a room code
             </button>
           </>
         ) : (
           <>
-            <label className="mt-4 block text-xs font-semibold uppercase tracking-wide text-slate-400">
+            <label htmlFor={codeId} className="mt-4 block text-xs font-semibold uppercase tracking-wide text-slate-400">
               Room code
             </label>
             <input
+              id={codeId}
               value={code}
               onChange={(e) => setCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 4))}
               placeholder="ABCD"
               autoCapitalize="characters"
               autoComplete="off"
-              className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2.5 text-center text-2xl font-bold tracking-[0.4em] text-slate-100 outline-none focus:border-sky-400"
+              className="field mt-1 px-3 py-2.5 text-center text-2xl font-bold tracking-[0.4em]"
             />
             <button
               disabled={!nameOk || !codeOk || connecting}
               onClick={() => joinRoom(code, name)}
-              className="mt-4 w-full rounded-lg bg-sky-500 px-4 py-3 font-semibold text-slate-950 transition hover:bg-sky-400 disabled:opacity-40"
+              className="btn btn-primary mt-4 w-full rounded-xl px-4 py-3"
             >
               {connecting ? "Joining…" : "Join room"}
             </button>
             {!initialCode && (
               <button
                 onClick={() => setMode("home")}
-                className="mt-2 w-full rounded-lg border border-slate-600 px-4 py-2.5 text-sm font-semibold text-slate-200 hover:bg-slate-800"
+                className="btn btn-ghost mt-2.5 w-full rounded-xl px-4 py-2.5 text-sm"
               >
                 ← Create a room instead
               </button>
@@ -105,12 +122,16 @@ export default function JoinScreen({ initialCode }: { initialCode?: string | nul
           </>
         )}
 
-        {error && <p className="mt-3 text-center text-sm text-amber-400">{error}</p>}
+        {error && (
+          <p className="anim-fade-in mt-3 rounded-lg border border-amber-400/30 bg-amber-500/10 px-3 py-2 text-center text-sm text-amber-300">
+            {error}
+          </p>
+        )}
 
         {!user && (
           <button
             onClick={() => setShowLogin(true)}
-            className="mt-4 w-full text-center text-xs font-semibold text-sky-300 hover:text-sky-200"
+            className="mt-4 w-full text-center text-xs font-semibold text-sky-300 transition hover:text-sky-200"
           >
             Have an account? Log in
           </button>
