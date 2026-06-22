@@ -1,25 +1,41 @@
 import { MODE_LABELS } from "../game/questions";
 import { useGame } from "../game/store";
+import { useAuth } from "../auth/useAuth";
+import { xpForAttempt } from "../game/leveling";
+import XpReport from "./XpReport";
 
-export default function Results({ onReplay }: { onReplay: () => void }) {
-  const { score, questions, records, best } = useGame();
+export default function Results({ onReplay, fromXp }: { onReplay: () => void; fromXp: number }) {
+  const { score, questions, records, best, difficulty } = useGame();
   const total = questions.length;
+  const user = useAuth((s) => s.user);
+
+  // XP earned this round — same formula the server uses to total lifetime XP
+  // (solo accuracy is binary). Only logged-in players accrue it to an account.
+  const roundXp = records.reduce(
+    (sum, r) => sum + xpForAttempt({ accuracy: r.correct ? 1 : 0, isCorrect: r.correct, difficulty }),
+    0,
+  );
 
   return (
-    <div className="absolute inset-0 flex items-end justify-center p-4 pb-safe sm:items-center sm:p-5">
-      <div className="w-full max-w-md rounded-2xl border border-slate-700/60 bg-slate-900/95 p-5 shadow-2xl sm:p-6">
-        <h2 className="text-center text-xl font-bold sm:text-2xl">Round complete</h2>
-        <p className="mt-1 text-center text-4xl font-black text-emerald-400">
+    <div className="anim-fade-in absolute inset-0 flex items-end justify-center p-4 pb-safe sm:items-center sm:p-5">
+      <div className="glass-card anim-slide-up w-full max-w-md rounded-3xl p-5 sm:p-6">
+        <h2 className="text-center text-xl font-bold tracking-tight sm:text-2xl">Round complete</h2>
+        <p className="anim-pop mt-1 text-center text-5xl font-black text-emerald-400 drop-shadow-[0_2px_16px_rgba(52,211,153,0.3)]">
           {score}
           <span className="text-2xl font-bold text-slate-400">/{total}</span>
         </p>
         <p className="text-center text-sm text-slate-400">Best: {best}</p>
+        {user ? (
+          <XpReport fromXp={fromXp} gainedXp={roundXp} />
+        ) : (
+          <p className="mt-2 text-center text-xs text-slate-500">Log in to earn XP &amp; level up</p>
+        )}
 
-        <ul className="mt-3 max-h-52 space-y-1 overflow-y-auto pr-1 text-sm sm:mt-4 sm:max-h-64">
+        <ul className="stagger mt-3 max-h-52 space-y-1 overflow-y-auto pr-1 text-sm sm:mt-4 sm:max-h-64">
           {records.map((r, i) => (
             <li
               key={i}
-              className="flex items-center justify-between rounded-md bg-slate-800/60 px-3 py-1.5"
+              className="glass-soft flex items-center justify-between rounded-xl px-3 py-1.5"
             >
               <span className="flex items-center gap-2">
                 <span aria-hidden>{r.correct ? "✅" : "❌"}</span>
@@ -32,7 +48,7 @@ export default function Results({ onReplay }: { onReplay: () => void }) {
 
         <button
           onClick={onReplay}
-          className="mt-4 w-full rounded-lg bg-sky-500 px-4 py-3 font-semibold text-slate-950 hover:bg-sky-400 active:bg-slate-100"
+          className="btn btn-primary mt-4 w-full rounded-xl px-4 py-3"
         >
           Play again
         </button>

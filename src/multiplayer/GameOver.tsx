@@ -4,6 +4,8 @@ import { playerColor } from "./colors";
 import type { PlayerInfo } from "./protocol";
 import { Leaderboard } from "./ui";
 import { useRoom } from "./useRoom";
+import { useAuth } from "../auth/useAuth";
+import XpReport from "../components/XpReport";
 
 export default function GameOver({ countries }: { countries: Country[] }) {
   const finalLeaderboard = useRoom((s) => s.finalLeaderboard);
@@ -13,6 +15,9 @@ export default function GameOver({ countries }: { countries: Country[] }) {
   const setLobbyDifficulty = useRoom((s) => s.setLobbyDifficulty);
   const playAgain = useRoom((s) => s.playAgain);
   const leave = useRoom((s) => s.leave);
+  const gameXp = useRoom((s) => s.gameXp);
+  const xpBeforeGame = useRoom((s) => s.xpBeforeGame);
+  const user = useAuth((s) => s.user);
 
   if (!room) return null;
   const board: PlayerInfo[] =
@@ -22,11 +27,11 @@ export default function GameOver({ countries }: { countries: Country[] }) {
   const top3 = board.slice(0, 3);
 
   return (
-    <div className="absolute inset-0 z-10 flex items-end justify-center p-4 pb-safe sm:items-center">
-      <div className="w-full max-w-md rounded-2xl border border-slate-700/60 bg-slate-900/94 p-5 shadow-2xl backdrop-blur sm:p-6">
-        <h2 className="text-center text-xl font-bold sm:text-2xl">Game over</h2>
+    <div className="anim-fade-in absolute inset-0 z-10 flex items-end justify-center p-4 pb-safe sm:items-center">
+      <div className="glass-card anim-slide-up w-full max-w-md rounded-3xl p-5 sm:p-6">
+        <h2 className="text-center text-xl font-bold tracking-tight sm:text-2xl">Game over</h2>
         {winner && (
-          <p className="mt-1 text-center text-sm text-slate-300">
+          <p className="anim-fade-up mt-1 text-center text-sm text-slate-300">
             🏆 <span className="font-bold text-amber-300">{winner.name}</span> wins with{" "}
             {winner.score}!
           </p>
@@ -41,14 +46,17 @@ export default function GameOver({ countries }: { countries: Country[] }) {
             const h = rank === 0 ? "h-24" : rank === 1 ? "h-16" : "h-12";
             return (
               <div key={p.id} className="flex w-20 flex-col items-center">
-                <span className="mb-1 text-sm">{["🥇", "🥈", "🥉"][rank]}</span>
+                <span className="mb-1 text-base">{["🥇", "🥈", "🥉"][rank]}</span>
                 <span className="max-w-full truncate text-xs font-semibold text-slate-200">
                   {p.name}
                 </span>
                 <span className="text-xs font-bold tabular-nums text-emerald-400">{p.score}</span>
                 <div
-                  className={`mt-1 w-full rounded-t-lg ${h}`}
-                  style={{ background: c.hex, opacity: 0.85 }}
+                  className={`anim-grow-up mt-1 w-full rounded-t-xl shadow-[inset_0_2px_0_rgba(255,255,255,0.3),0_8px_20px_-8px_rgba(0,0,0,0.6)] ${h}`}
+                  style={{
+                    background: `linear-gradient(180deg, ${c.hex}, ${c.hex}cc)`,
+                    animationDelay: rank === 0 ? "0.1s" : rank === 1 ? "0.18s" : "0.26s",
+                  }}
                 />
               </div>
             );
@@ -59,6 +67,8 @@ export default function GameOver({ countries }: { countries: Country[] }) {
           <Leaderboard players={board} myId={myId} />
         </div>
 
+        {user && gameXp > 0 && <XpReport fromXp={xpBeforeGame} gainedXp={gameXp} />}
+
         {isHost ? (
           <>
             <div className="mt-4">
@@ -66,7 +76,7 @@ export default function GameOver({ countries }: { countries: Country[] }) {
             </div>
             <button
               onClick={() => playAgain(countries)}
-              className="mt-3 w-full rounded-lg bg-emerald-500 px-4 py-3 font-semibold text-slate-950 hover:bg-emerald-400"
+              className="btn btn-success mt-3 w-full rounded-xl px-4 py-3"
             >
               Play again →
             </button>
@@ -78,7 +88,7 @@ export default function GameOver({ countries }: { countries: Country[] }) {
         )}
         <button
           onClick={leave}
-          className="mt-2 w-full rounded-lg border border-slate-600 px-4 py-2 text-sm font-semibold text-slate-300 hover:bg-slate-800"
+          className="btn btn-ghost mt-2.5 w-full rounded-xl px-4 py-2 text-sm"
         >
           Leave room
         </button>

@@ -57,7 +57,7 @@ export default function RoundHud({
       style={keyboardInset ? { transform: `translateY(-${keyboardInset}px)` } : undefined}
     >
       {/* Status bar: round, timer, answered tally */}
-      <div className="pointer-events-auto flex items-center gap-3 rounded-full border border-slate-700/60 bg-slate-900/85 px-3 py-1.5 text-sm text-slate-200 backdrop-blur">
+      <div className="anim-fade-up pointer-events-auto flex items-center gap-3 rounded-full border border-white/10 bg-slate-900/75 px-3 py-1.5 text-sm text-slate-200 shadow-lg shadow-black/30 backdrop-blur">
         <span>
           Round <strong className="text-slate-100">{question.round + 1}</strong>/
           {question.totalRounds}
@@ -70,14 +70,14 @@ export default function RoundHud({
           <button
             onClick={() => skip({ expect: "question", round: question.round })}
             title="Skip to the answer"
-            className="rounded-full border border-slate-600 px-2.5 py-0.5 text-xs font-semibold text-slate-300 hover:bg-slate-800"
+            className="rounded-full border border-white/15 bg-white/5 px-2.5 py-0.5 text-xs font-semibold text-slate-300 transition hover:bg-white/12 hover:text-white"
           >
             Skip →
           </button>
         )}
       </div>
 
-      <div className="pointer-events-auto w-full max-w-md rounded-2xl border border-slate-700/60 bg-slate-900/92 p-3 shadow-2xl backdrop-blur sm:p-4">
+      <div className="glass-card anim-fade-up pointer-events-auto w-full max-w-md rounded-2xl p-3 sm:p-4">
         <p className="text-center text-xs uppercase tracking-wide text-slate-400">
           {mode ? MODE_LABELS[mode] : ""}
         </p>
@@ -86,18 +86,18 @@ export default function RoundHud({
           <img
             src={flag}
             alt="Flag to identify"
-            className="mx-auto my-2 h-16 rounded-md border border-slate-600 object-contain sm:my-3 sm:h-24"
+            className="mx-auto my-2 h-16 rounded-lg border border-white/15 object-contain shadow-lg shadow-black/40 ring-1 ring-black/20 sm:my-3 sm:h-24"
           />
         )}
 
         {mode === "name" && target && (
-          <p className="my-1.5 text-center text-xl font-bold text-amber-300 sm:my-2 sm:text-2xl">
+          <p className="my-1.5 text-center text-xl font-bold text-amber-300 drop-shadow-[0_1px_8px_rgba(252,211,77,0.25)] sm:my-2 sm:text-2xl">
             {target.name}
           </p>
         )}
 
         {answered ? (
-          <p className="mt-2 text-center text-sm font-semibold text-emerald-400">
+          <p className="anim-pop mt-2 text-center text-sm font-semibold text-emerald-400">
             ✓ Locked in — waiting for {connected.length - answeredCount} more…
           </p>
         ) : isTyped ? (
@@ -111,11 +111,11 @@ export default function RoundHud({
               autoCorrect="off"
               autoCapitalize="none"
               spellCheck={false}
-              className="flex-1 rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-slate-100 outline-none focus:border-sky-400"
+              className="field flex-1 px-3 py-2"
             />
             <button
               type="submit"
-              className="rounded-lg bg-sky-500 px-4 py-2 font-semibold text-slate-950 hover:bg-sky-400"
+              className="btn btn-primary rounded-lg px-4 py-2"
             >
               Go
             </button>

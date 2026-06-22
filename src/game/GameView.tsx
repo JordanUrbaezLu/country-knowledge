@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import DifficultyPicker from "../components/DifficultyPicker";
 import QuizHud from "../components/QuizHud";
 import Results from "../components/Results";
@@ -6,6 +6,7 @@ import GlobeView from "../globe/GlobeView";
 import type { Country } from "../data/types";
 import { isTouchDevice } from "../lib/device";
 import { recordSoloRound } from "../auth/recordSolo";
+import { useAuth } from "../auth/useAuth";
 import type { Difficulty } from "./questions";
 import { useGame } from "./store";
 
@@ -14,6 +15,15 @@ export default function GameView({ countries }: { countries: Country[] }) {
   const start = useGame((s) => s.start);
   const setDifficulty = useGame((s) => s.setDifficulty);
   const answerClick = useGame((s) => s.answerClick);
+  const settings = useAuth((s) => s.settings);
+
+  // Snapshot lifetime XP when a round begins so the end-of-round report can
+  // animate from it to the new total (the round's gain is computed locally).
+  const [xpBefore, setXpBefore] = useState(0);
+  const beginRound = () => {
+    setXpBefore(useAuth.getState().stats?.xp ?? 0);
+    start(countries, difficulty);
+  };
 
   // When a round finishes, log each question to the player's account (no-op for
   // guests). Guarded so it fires exactly once per completed round.
@@ -44,15 +54,21 @@ export default function GameView({ countries }: { countries: Country[] }) {
   const target = q?.country ?? null;
   const reveal = status === "feedback";
 
-  const highlightId = q && (q.mode === "locate" || reveal) ? target!.id : null;
+  // Easy-mode flag hint: light up + fly to the country so you can see WHERE it is
+  // while naming it from its flag. (Locate already highlights; Name would give the
+  // answer away, so it gets the continent text hint instead.)
+  const easyFlagHint =
+    difficulty === "easy" && q?.mode === "flag" && status === "playing";
+
+  const highlightId = q && (q.mode === "locate" || reveal || easyFlagHint) ? target!.id : null;
 
   const focus = useMemo(() => {
     if (!q || !target || target.lat == null || target.lng == null) return null;
-    if ((q.mode === "locate" && status === "playing") || reveal) {
+    if ((q.mode === "locate" && status === "playing") || reveal || easyFlagHint) {
       return { lat: target.lat, lng: target.lng };
     }
     return null;
-  }, [q, target, status, reveal]);
+  }, [q, target, status, reveal, easyFlagHint]);
 
   const onCountryClick =
     status === "playing" && q?.mode === "name" ? answerClick : undefined;
@@ -70,6 +86,8 @@ export default function GameView({ countries }: { countries: Country[] }) {
         highlightId={highlightId}
         focus={focus}
         crosshair={crosshair}
+        poles={settings.showPoles}
+        rotationMode={settings.globeMode}
         onCountryClick={onCountryClick}
       />
 
@@ -78,11 +96,11 @@ export default function GameView({ countries }: { countries: Country[] }) {
           best={best}
           difficulty={difficulty}
           onDifficulty={setDifficulty}
-          onStart={() => start(countries, difficulty)}
+          onStart={beginRound}
         />
       )}
       {(status === "playing" || status === "feedback") && <QuizHud />}
-      {status === "done" && <Results onReplay={() => start(countries, difficulty)} />}
+      {status === "done" && <Results onReplay={beginRound} fromXp={xpBefore} />}
     </>
   );
 }
@@ -99,15 +117,19 @@ function StartCard({
   onStart: () => void;
 }) {
   return (
-    <div className="absolute inset-0 flex items-end justify-center p-4 pb-safe sm:items-center sm:p-5">
-      <div className="w-full max-w-md rounded-2xl border border-slate-700/60 bg-slate-900/92 p-5 text-center shadow-2xl backdrop-blur sm:p-6">
-        <h2 className="text-xl font-bold sm:text-2xl">10-Question Challenge</h2>
+    <div className="anim-fade-in absolute inset-0 flex items-end justify-center p-4 pb-safe sm:items-center sm:p-5">
+      <div className="glass-card anim-slide-up w-full max-w-md rounded-3xl p-5 text-center sm:p-6">
+        <h2 className="text-xl font-bold tracking-tight sm:text-2xl">10-Question Challenge</h2>
         <p className="mt-2 text-sm text-slate-300">A mix of three challenges:</p>
-        <ul className="mx-auto mt-2 max-w-xs space-y-1 text-left text-sm text-slate-400">
-          <li>🟠 A country lights up — type its name</li>
-          <li>🏳️ Identify a country from its flag</li>
-          <li>
-            🌍 Find a named country {isTouchDevice ? "with the crosshair" : "and click it"}
+        <ul className="mx-auto mt-3 max-w-xs space-y-1.5 text-left text-sm text-slate-300">
+          <li className="flex items-center gap-2.5 rounded-lg px-1">
+            <span aria-hidden>🟠</span> A country lights up — type its name
+          </li>
+          <li className="flex items-center gap-2.5 rounded-lg px-1">
+            <span aria-hidden>🏳️</span> Identify a country from its flag
+          </li>
+          <li className="flex items-center gap-2.5 rounded-lg px-1">
+            <span aria-hidden>🌍</span> Find a named country {isTouchDevice ? "with the crosshair" : "and click it"}
           </li>
         </ul>
         <div className="mt-4">
@@ -116,7 +138,7 @@ function StartCard({
         {best > 0 && <p className="mt-3 text-sm text-slate-500">Best so far: {best}/10</p>}
         <button
           onClick={onStart}
-          className="mt-4 w-full rounded-lg bg-sky-500 px-4 py-3 font-semibold text-slate-950 hover:bg-sky-400 active:bg-sky-300"
+          className="btn btn-primary mt-4 w-full rounded-xl px-4 py-3"
         >
           Start round
         </button>

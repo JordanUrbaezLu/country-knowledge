@@ -30,10 +30,10 @@ export function PlayerChip({
 }) {
   return (
     <div
-      className={`flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm ${
+      className={`flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm transition ${
         player.connected
-          ? "border-slate-600/70 bg-slate-800/70"
-          : "border-slate-700/40 bg-slate-800/30 opacity-50"
+          ? "border-white/12 bg-white/8 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]"
+          : "border-white/8 bg-white/4 opacity-50"
       }`}
     >
       <PlayerDot colorIndex={player.colorIndex} />
@@ -66,18 +66,20 @@ export function Leaderboard({
       {title && (
         <p className="mb-1.5 text-center text-xs uppercase tracking-wide text-slate-400">{title}</p>
       )}
-      <ol className="space-y-1">
+      <ol className="stagger space-y-1">
         {players.map((p, i) => (
           <li
             key={p.id}
             data-testid="lb-entry"
             data-name={p.name}
             data-score={p.score}
-            className={`flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm ${
-              p.id === myId ? "bg-sky-500/15 ring-1 ring-sky-400/40" : "bg-slate-800/50"
+            className={`flex items-center gap-2 rounded-xl px-3 py-1.5 text-sm ${
+              p.id === myId ? "bg-sky-500/15 ring-1 ring-sky-400/40" : "glass-soft"
             } ${p.connected ? "" : "opacity-50"}`}
           >
-            <span className="w-5 text-center font-bold text-slate-400">{i + 1}</span>
+            <span className={`w-5 text-center font-bold ${i === 0 ? "text-amber-300" : "text-slate-400"}`}>
+              {i + 1}
+            </span>
             <PlayerDot colorIndex={p.colorIndex} />
             <span className="flex-1 truncate font-medium text-slate-100">{p.name}</span>
             <span className="font-bold tabular-nums text-emerald-400">{p.score}</span>

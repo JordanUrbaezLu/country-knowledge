@@ -34,18 +34,17 @@ export default function ExplorePanel({ country, stateCount, onClose }: ExplorePa
     <aside
       className={[
         // --- shared ---
-        "flex flex-col overflow-y-auto",
-        "border border-slate-700/60 bg-slate-900/92 shadow-xl backdrop-blur",
+        "glass-card flex flex-col overflow-y-auto",
         // --- mobile: compact bottom sheet (max ~40% of screen height) ---
-        "fixed bottom-0 inset-x-0 max-h-[42vh] rounded-t-2xl border-b-0 pb-safe",
+        "anim-slide-up fixed bottom-0 inset-x-0 max-h-[42vh] rounded-t-3xl border-b-0 pb-safe",
         // --- desktop: right side panel ---
-        "sm:absolute sm:inset-x-auto sm:bottom-auto sm:right-0 sm:top-0 sm:m-4 sm:w-72",
-        "sm:max-h-[calc(100%-2rem)] sm:rounded-xl sm:border-b",
+        "sm:anim-fade-up sm:absolute sm:inset-x-auto sm:bottom-auto sm:right-0 sm:top-0 sm:m-4 sm:w-72",
+        "sm:max-h-[calc(100%-2rem)] sm:rounded-2xl",
       ].join(" ")}
     >
       {/* Mobile drag handle */}
-      <div className="flex justify-center pt-2 sm:hidden">
-        <div className="h-1 w-10 rounded-full bg-slate-600" />
+      <div className="flex justify-center pt-2.5 sm:hidden">
+        <div className="h-1 w-10 rounded-full bg-white/25" />
       </div>
 
       <div className="p-3 sm:p-4">
@@ -55,7 +54,7 @@ export default function ExplorePanel({ country, stateCount, onClose }: ExplorePa
               <img
                 src={flag}
                 alt={`Flag of ${country.name}`}
-                className="h-6 w-9 rounded border border-slate-600 object-cover sm:h-7 sm:w-11"
+                className="h-6 w-9 rounded border border-white/15 object-cover shadow-md shadow-black/40 sm:h-7 sm:w-11"
               />
             )}
             <h2 className="text-sm font-bold leading-tight sm:text-base">{country.name}</h2>
@@ -63,7 +62,7 @@ export default function ExplorePanel({ country, stateCount, onClose }: ExplorePa
           <button
             onClick={onClose}
             aria-label="Close"
-            className="rounded px-2 py-1 text-slate-400 hover:bg-slate-700/60 hover:text-slate-200 active:bg-slate-700"
+            className="rounded-lg px-2 py-1 text-slate-400 transition hover:bg-white/10 hover:text-slate-200"
           >
             ✕
           </button>
@@ -83,7 +82,7 @@ export default function ExplorePanel({ country, stateCount, onClose }: ExplorePa
         </dl>
 
         {country.knownFor.length > 0 && (
-          <div className="mt-2 border-t border-slate-700/60 pt-2">
+          <div className="mt-2 border-t border-white/10 pt-2">
             <p className="mb-0.5 text-xs font-semibold uppercase tracking-wide text-slate-400">
               Known for
             </p>
@@ -98,7 +97,7 @@ export default function ExplorePanel({ country, stateCount, onClose }: ExplorePa
           </div>
         )}
 
-        <p className="mt-2 border-t border-slate-700/60 pt-1.5 text-xs text-slate-400">
+        <p className="mt-2 border-t border-white/10 pt-1.5 text-xs text-slate-400">
           {stateCount === null
             ? "Loading state borders…"
             : stateCount > 0

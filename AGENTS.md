@@ -1,14 +1,14 @@
 # Globe Royale — agent brief
 
 3D-globe country-quiz. **Explore** (click a country → flag/capital/state borders), **Solo**
-(10-question round), and **Family** (online multiplayer, GeoGuessr-style). React + TypeScript +
+(10-question round), and **Online** (online multiplayer, GeoGuessr-style). React + TypeScript +
 **Vite SPA** (NOT Next.js), deployed on **Vercel**. Desktop-first, mobile-supported.
 
 ## Hard-won facts — do not re-learn
 - **No cloud server.** Multiplayer is a **self-hosted Node server** (`server/index.ts`, `ws` + `sirv`,
   run via `tsx`) that the user runs on their own machine when they want to play. It serves the built
   SPA **and** the WebSocket on **one port** (default 1999), so the client connects **same-origin** —
-  no env var needed in prod. Family joins a public link from a **tunnel**: `npm run share`
+  no env var needed in prod. Players join a public link from a **tunnel**: `npm run share`
   (`scripts/share.mjs` starts the server + a Cloudflare quick tunnel via the `cloudflared` npm package;
   waits for the `connected` event before printing the link). HTTP+WS through it verified end-to-end.
   (We pivoted OFF PartyKit: its shared `partykit.dev` zone hit Cloudflare's 10k-custom-domain cap, a
@@ -36,6 +36,20 @@
 - Reveal map: `GlobeView` takes `highlights: Record<id,color>` (answer gold + each guess in its
   player color) and `markers` (floating name labels via react-globe.gl `htmlElementsData`). Player
   names are HTML-escaped before injection.
+- **Globe rotation modes (`rotationMode`, from `settings.globeMode`).** "guided" uses globe.gl's
+  built-in **OrbitControls** clamped to polar 12–168° (stable upright horizon). "free" is a full 360°
+  **tumble** — OrbitControls structurally can't roll over the poles (hard-clamps polar to [0,π] + fixed
+  up-vector), so free swaps to a **separate `TrackballControls`** instance GlobeView creates on the same
+  `renderer().domElement`. Only one is `.enabled` at a time. globe.gl's render loop only `update()`s its
+  OrbitControls **when `controls.enabled`** (three-render-objects:264), so disabling orbit stops it
+  fighting the trackball — but the trackball then needs its **own rAF loop** calling `update()`. On
+  free→guided, **reset `camera.up=(0,1,0)` before `orbit.update()`** or the horizon stays rolled.
+  `pointOfView` fly-to is control-agnostic (sets camera.position directly) so focus still works in both.
+  **Trackpad two-finger rotate is a SEPARATE `wheel` handler** (`trackpadRotate`): guided uses the
+  clamped `pointOfView({lat,lng})` path (lat is bounded ±90° → can't pass a pole), so free instead
+  rotates the camera by a **quaternion about the globe centre** (no clamp) — else trackpad users hit a
+  pole wall even though click-drag (trackball) tumbles. DEV hook: `window.__ckGlobe()` (verified by
+  `node scripts/globe-mode-verify.mjs`, which drives BOTH click-drag and wheel past the pole).
 - `MultiplayerView` sets `window.__ckTarget` **only under `import.meta.env.DEV`** (e2e answer hook,
   stripped from prod builds).
 - Test gotchas: CSS `text-transform:uppercase` makes `innerText` UPPERCASE (match case-insensitively);
@@ -51,11 +65,28 @@
   (`mp_games` holds win placement). MP results attribute via `server/mpStats.ts` (pure, tested) hooked
   into the `io.broadcast` seam — engine stays dataset-free; the session cookie rides the same-origin WS
   upgrade so `readSession(req)` maps player→account in `wss.on("connection")`.
+  - **Identity invariant:** the UUID `id` (stats/`mp_games`/session key) and the login `username` are
+    **immutable**; only `display_name` is mutable (`POST /api/account/name` → `data.updateDisplayName`,
+    `validateDisplayName`; client `useAuth.renameAccount`, edited in `ProfileView`). So `display_name`
+    is **no longer always == `username`** (it was at signup) — anything user-facing reads `displayName`,
+    login/uniqueness reads `username`, and stats key off `id`. Renaming never touches attributions.
 - **Insights are OFFLINE & manual.** `npm run insights` (`scripts/insights.ts`) runs LOCALLY: reads
   Neon → `computeInsightFeatures` (pure, `server/insights.ts`) → Claude **Haiku 4.5** with the LOCAL
   `ANTHROPIC_API_KEY` (never deployed) → writes committed `data/insights.json`
   (`{userId:{message,generated_at}}`). You merge+deploy; gated `GET /api/insights` returns only the
   logged-in user's entry. (Consult the `claude-api` skill for current model/SDK before editing it.)
+- **XP & levels (`src/game/leveling.ts`, pure, shared client+server like `protocol.ts`).** XP is
+  **DERIVED** from the `attempts` log + a flat bonus per MP win — NOT a stored counter (can't drift,
+  retroactive). Formula: per answer `round((2 + 10·accuracy) · difficultyMult)` (easy 1 / med 1.5 /
+  hard 2; accuracy falls back to `is_correct`), `+25` per MP win. Level curve `cum(L)=50·L·(L−1)`
+  (each level costs `100·L`); `levelForXp(xp)` inverts it. Server totals it in `getProfileStats.xp` +
+  per-entry `LeaderboardEntry.xp` (board is **ranked by XP**); both scan raw rows and apply the shared
+  formula in JS (SQL stays pg-mem-trivial). Client: `AuthStats.xp` → `LevelBadge` (top-left when
+  logged in) + ProfileView level card; solo Results shows `+XP` (client recomputes via the same
+  formula); MP gameover calls `useAuth.refreshStats()` (best-effort — the MP write is fire-and-forget,
+  so it self-heals on the next refresh / profile open). Guests earn nothing (no account to store to).
+  Edit the curve/weights ONLY in `leveling.ts`. (`GET /api/leaderboard` default limit is 20 — guard on
+  the raw param, since `Number(null)===0` is finite and would otherwise collapse it to 1.)
 
 ## Code map
 - `src/game/questions.ts` — question generation, **difficulty fame buckets** (easy 50 / med 120 / hard all), `MODE_DURATION_MS`.

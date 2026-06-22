@@ -5,8 +5,10 @@ import { loadStateFeatures, type StateFeature } from "../data/states";
 import { stateFact } from "../data/stateFacts";
 import type { Country } from "../data/types";
 import { isTouchDevice } from "../lib/device";
+import { useAuth } from "../auth/useAuth";
 
 export default function ExploreView({ countries }: { countries: Country[] }) {
+  const settings = useAuth((s) => s.settings);
   const [selected, setSelected] = useState<Country | null>(null);
   const [stateFeatures, setStateFeatures] = useState<StateFeature[] | null>(null);
   const [spinnerDone, setSpinnerDone] = useState(false);
@@ -82,21 +84,30 @@ export default function ExploreView({ countries }: { countries: Country[] }) {
         stateFeatures={stateFeatures}
         focus={focus}
         crosshair={isTouchDevice}
+        rotationMode={settings.globeMode}
+        // Hide the N/S orientation badges per the account setting, and always
+        // while a country is selected: the info sheet (bottom sheet on mobile)
+        // sits over the pole and the badge would bleed through the glass footer.
+        poles={settings.showPoles && !selected}
         onCountryClick={handleClick}
         onStateClick={handleStateClick}
       />
 
+      {/* Loading = its own top-level modal: a dimmed backdrop centres the spinner
+          over everything (globe + panel), blocks interaction so you wait for the
+          country to finish loading, and clears to reveal the focused country. */}
       {loading && (
-        /* On mobile: centre in the upper ~42 vh so it's above the bottom sheet */
-        <div className="pointer-events-none absolute inset-x-0 top-0 flex h-[42vh] items-center justify-center sm:inset-0 sm:h-auto sm:bg-slate-950/40">
-          <div className="flex flex-col items-center gap-3 rounded-xl bg-slate-900/85 px-6 py-5 shadow-xl backdrop-blur">
-            <div className="h-9 w-9 animate-spin rounded-full border-[3px] border-slate-600 border-t-sky-400" />
+        <div className="scrim anim-fade-in absolute inset-0 z-50 flex items-center justify-center p-6">
+          <div className="glass-card anim-scale-in flex flex-col items-center gap-3 rounded-2xl px-8 py-7">
+            <div className="h-9 w-9 animate-spin rounded-full border-[3px] border-white/15 border-t-sky-400" />
             <p className="text-sm text-slate-300">Loading {selected?.name}…</p>
           </div>
         </div>
       )}
 
-      {selected && (
+      {/* Panel waits until loading clears, so it slides up after the modal — not
+          alongside the spinner. */}
+      {selected && spinnerDone && (
         <ExplorePanel
           country={selected}
           stateCount={stateFeatures ? stateFeatures.length : null}
@@ -115,15 +126,15 @@ export default function ExploreView({ countries }: { countries: Country[] }) {
               : "bottom-6",
           ].join(" ")}
         >
-          <div className="flex items-start gap-3 rounded-xl border border-amber-500/40 bg-slate-900/90 p-4 shadow-xl backdrop-blur">
+          <div className="glass-card anim-pop flex items-start gap-3 rounded-2xl border-amber-400/30 p-4 ring-1 ring-amber-400/20">
             <div className="flex-1">
-              <p className="font-bold text-amber-300">{stateInfo.name}</p>
+              <p className="font-bold text-amber-300 drop-shadow-[0_1px_8px_rgba(252,211,77,0.25)]">{stateInfo.name}</p>
               <p className="mt-0.5 text-sm text-slate-200">{stateInfo.fact}</p>
             </div>
             <button
               onClick={() => setStateInfo(null)}
               aria-label="Close"
-              className="rounded px-2 text-slate-400 hover:bg-slate-700/60 hover:text-slate-200"
+              className="rounded-lg px-2 text-slate-400 transition hover:bg-white/10 hover:text-slate-200"
             >
               ✕
             </button>

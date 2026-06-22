@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import Globe, { type GlobeMethods } from "react-globe.gl";
 import * as THREE from "three";
+import { TrackballControls } from "three/examples/jsm/controls/TrackballControls.js";
 import type { StateFeature } from "../data/states";
 import type { Country, CountryFeature } from "../data/types";
 import { pointInGeometry } from "../lib/geo";
@@ -35,6 +36,12 @@ export interface GlobeViewProps {
   markers?: GlobeMarker[] | null;
   /** show always-on N/S compass pole badges (orientation aid). */
   poles?: boolean;
+  /**
+   * "guided" (default) keeps a stable upright horizon — you can't tip fully onto
+   * a pole. "free" opens the full vertical range so you can swing right onto the
+   * N/S poles and look straight down. Both keep north up (no upside-down).
+   */
+  rotationMode?: "guided" | "free";
   /** camera altitude when focusing (globe radii); lower = closer. */
   focusAltitude?: number;
   /** currently selected country (explore). */
@@ -135,6 +142,7 @@ export default function GlobeView({
   highlights = null,
   markers = null,
   poles = true,
+  rotationMode = "guided",
   focusAltitude,
   selectedId = null,
   showLabels = true,
@@ -148,6 +156,9 @@ export default function GlobeView({
   onStateClick,
 }: GlobeViewProps) {
   const globeRef = useRef<GlobeMethods | undefined>(undefined);
+  // Free mode drives its own TrackballControls (full 360° tumble); guided uses
+  // globe.gl's built-in OrbitControls. Only one is enabled at a time.
+  const trackballRef = useRef<TrackballControls | null>(null);
   const { ref: containerRef, size } = useElementSize<HTMLDivElement>();
   // Fixed-size reticle box: the raycast samples ITS centre. The label pill is
   // absolutely positioned below it so its appearance never moves the reticle
@@ -304,18 +315,101 @@ export default function GlobeView({
     else onCountryClick?.(crosshairTarget.country);
   }, [crosshairTarget, onCountryClick, onStateClick]);
 
-  // Orbit controls setup.
+  // Rotation controls. GUIDED uses globe.gl's built-in OrbitControls (clamped
+  // ~12° shy of each pole, fixed upright horizon). FREE swaps to our own
+  // TrackballControls instance so you can tumble the globe a full 360° in every
+  // direction, right over the poles — something OrbitControls structurally can't
+  // do (it hard-clamps the polar angle to [0,π] and keeps a fixed up-vector).
   useEffect(() => {
     if (!ready) return;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const controls = globeRef.current?.controls() as any;
-    if (!controls) return;
-    controls.autoRotate = autoRotate;
-    controls.autoRotateSpeed = 0.6;
-    controls.enableZoom = true;
-    controls.minDistance = 104;
-    controls.maxDistance = 600;
-  }, [autoRotate, ready]);
+    const g = globeRef.current as any;
+    const orbit = g?.controls();
+    if (!orbit) return;
+    orbit.enableZoom = true;
+    orbit.minDistance = 104;
+    orbit.maxDistance = 600;
+
+    if (rotationMode === "free") {
+      const camera = g.camera?.();
+      const renderer = g.renderer?.();
+      let tb = trackballRef.current;
+      if (!tb && camera && renderer) {
+        tb = new TrackballControls(camera, renderer.domElement);
+        tb.noPan = true;
+        tb.noZoom = true; // zoom stays on the existing wheel → pointOfView path
+        tb.staticMoving = true; // no inertia → never fights a pointOfView fly-to
+        tb.rotateSpeed = 1.8;
+        trackballRef.current = tb;
+      }
+      // Hand off to the trackball. globe.gl's render loop only update()s its
+      // OrbitControls WHEN enabled (three-render-objects:264), so disabling orbit
+      // stops it fighting us; our own rAF loop (below) ticks the trackball.
+      orbit.autoRotate = false;
+      orbit.enabled = false;
+      if (tb) {
+        tb.enabled = true;
+        tb.target.set(0, 0, 0);
+        tb.update();
+      }
+    } else {
+      if (trackballRef.current) trackballRef.current.enabled = false;
+      // A prior free tumble may have rolled the up-vector; reset it so guided
+      // snaps back upright, then clamp the (possibly tipped) camera into range.
+      const camera = g.camera?.();
+      if (camera) camera.up.set(0, 1, 0);
+      orbit.enabled = true;
+      orbit.autoRotate = autoRotate;
+      orbit.autoRotateSpeed = 0.6;
+      orbit.minPolarAngle = THREE.MathUtils.degToRad(12);
+      orbit.maxPolarAngle = THREE.MathUtils.degToRad(168);
+      orbit.rotateSpeed = 0.9;
+      orbit.update();
+    }
+
+    // DEV-only inspection hook for e2e (stripped from prod, like __ckTarget).
+    if (import.meta.env.DEV) {
+      (window as { __ckGlobe?: unknown }).__ckGlobe = () => {
+        const cam = g.camera?.();
+        return {
+          mode: rotationMode,
+          upY: cam?.up?.y ?? null,
+          trackballEnabled: trackballRef.current?.enabled ?? false,
+          orbitEnabled: orbit.enabled,
+          orbitMinPolar: orbit.minPolarAngle,
+          orbitMaxPolar: orbit.maxPolarAngle,
+          orbitPolar: orbit.getPolarAngle?.() ?? null,
+        };
+      };
+    }
+  }, [autoRotate, ready, rotationMode]);
+
+  // Free mode: drive the trackball every frame — globe.gl's loop only ticks its
+  // own (now-disabled) OrbitControls, so without this the trackball is inert.
+  useEffect(() => {
+    if (!ready || rotationMode !== "free") return;
+    let raf = 0;
+    const tick = () => {
+      const tb = trackballRef.current;
+      if (tb && tb.enabled) tb.update();
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [ready, rotationMode]);
+
+  // Keep the trackball's cached screen rect correct so drag direction stays right.
+  useEffect(() => {
+    if (size.width > 0 && size.height > 0) trackballRef.current?.handleResize();
+  }, [size.width, size.height]);
+
+  // Dispose the trackball (and its DOM/window listeners) when the globe unmounts.
+  useEffect(() => {
+    return () => {
+      trackballRef.current?.dispose();
+      trackballRef.current = null;
+    };
+  }, []);
 
   useEffect(() => {
     if (ready) globeRef.current?.pointOfView({ lat: 20, lng: 0, altitude: 2.3 });
@@ -330,7 +424,7 @@ export default function GlobeView({
       // (which sits behind/near the bottom sheet on phones).
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const camera = (globeRef.current as any)?.camera?.();
-      lat = clamp(lat - crosshairLatOffset(camera?.fov ?? 50), -85, 85);
+      lat = clamp(lat - crosshairLatOffset(camera?.fov ?? 50), -89, 89);
     }
     globeRef.current?.pointOfView({ lat, lng: focus.lng, altitude: alt }, 800);
   }, [focus, ready, crosshair, focusAltitude]);
@@ -340,21 +434,41 @@ export default function GlobeView({
     const container = containerRef.current;
     if (!ready || !trackpadRotate || !container) return;
     const onWheel = (e: WheelEvent) => {
-      if (e.ctrlKey) return;
+      if (e.ctrlKey) return; // pinch-zoom → leave for the zoom path
       e.preventDefault();
       e.stopPropagation();
-      const g = globeRef.current;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const g = globeRef.current as any;
       if (!g) return;
-      const pov = g.pointOfView();
       const k = 0.22;
+      if (rotationMode === "free") {
+        // Free: rotate the camera around the globe centre with NO pole clamp, so a
+        // two-finger swipe tumbles right over the poles like a click-drag does.
+        // (The lat/lng pointOfView path below structurally can't — latitude is
+        // bounded ±90°.) Composes with the drag trackball, which re-reads the
+        // camera each frame.
+        const camera = g.camera?.();
+        if (!camera) return;
+        const kRad = (k * Math.PI) / 180;
+        const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion).normalize();
+        const up = camera.up.clone().normalize();
+        const q = new THREE.Quaternion()
+          .setFromAxisAngle(up, -e.deltaX * kRad)
+          .multiply(new THREE.Quaternion().setFromAxisAngle(right, -e.deltaY * kRad));
+        camera.position.applyQuaternion(q);
+        camera.up.applyQuaternion(q);
+        camera.lookAt(0, 0, 0);
+        return;
+      }
+      const pov = g.pointOfView();
       g.pointOfView(
-        { lat: clamp(pov.lat - e.deltaY * k, -85, 85), lng: pov.lng + e.deltaX * k, altitude: pov.altitude },
+        { lat: clamp(pov.lat - e.deltaY * k, -89, 89), lng: pov.lng + e.deltaX * k, altitude: pov.altitude },
         0,
       );
     };
     container.addEventListener("wheel", onWheel, { capture: true, passive: false });
     return () => container.removeEventListener("wheel", onWheel, { capture: true });
-  }, [ready, trackpadRotate, containerRef]);
+  }, [ready, trackpadRotate, containerRef, rotationMode]);
 
   // Clear any stale crosshair-driven hover state when the crosshair goes away.
   useEffect(() => {
@@ -522,7 +636,7 @@ export default function GlobeView({
                     ? "border-amber-400/40 bg-slate-900/85 text-amber-300 active:bg-slate-800"
                     : showLabels
                       ? "border-white/20 bg-slate-900/80 text-slate-100 active:bg-slate-800"
-                      : "border-sky-300/40 bg-sky-500 text-slate-950 active:bg-sky-300",
+                      : "btn btn-primary border-transparent",
                 ].join(" ")}
               >
                 {pill.text}

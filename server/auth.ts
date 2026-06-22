@@ -126,6 +126,19 @@ export function validateUsername(name: unknown): string | null {
   return null;
 }
 
+/** Display name is the human-facing label (shown in the profile, leaderboard, and
+ *  multiplayer) — looser than a username: any non-empty text up to the 24 chars the
+ *  MP name field allows. Control chars and angle brackets are rejected as
+ *  defence-in-depth (names are also HTML-escaped wherever they're injected). */
+export function validateDisplayName(name: unknown): string | null {
+  if (typeof name !== "string") return "Name is required";
+  const t = name.trim();
+  if (t.length < 1) return "Name is required";
+  if (t.length > 24) return "Name must be 24 characters or fewer";
+  if (/[\x00-\x1f<>]/.test(t)) return "Name has invalid characters";
+  return null;
+}
+
 export function validatePassword(pw: unknown): string | null {
   if (typeof pw !== "string") return "Password is required";
   if (pw.length < 6) return "Password must be at least 6 characters";

@@ -1,10 +1,12 @@
+import SegmentedToggle from "./SegmentedToggle";
+
 export type AppMode = "explore" | "solo" | "multiplayer";
 
-const LABELS: Record<AppMode, string> = {
-  explore: "Explore",
-  solo: "Solo",
-  multiplayer: "Online",
-};
+const OPTIONS = [
+  { value: "explore" as const, label: "Explore" },
+  { value: "solo" as const, label: "Solo" },
+  { value: "multiplayer" as const, label: "Online" },
+];
 
 export default function ModeSwitcher({
   mode,
@@ -14,18 +16,8 @@ export default function ModeSwitcher({
   onChange: (m: AppMode) => void;
 }) {
   return (
-    <div className="pointer-events-auto inline-flex rounded-full border border-slate-700/60 bg-slate-900/80 p-1 backdrop-blur">
-      {(["explore", "solo", "multiplayer"] as const).map((m) => (
-        <button
-          key={m}
-          onClick={() => onChange(m)}
-          className={`rounded-full px-4 py-1.5 text-sm font-semibold transition ${
-            mode === m ? "bg-sky-500 text-slate-950" : "text-slate-300 hover:text-white"
-          }`}
-        >
-          {LABELS[m]}
-        </button>
-      ))}
+    <div className="pointer-events-auto rounded-full shadow-lg shadow-black/30">
+      <SegmentedToggle options={OPTIONS} value={mode} onChange={onChange} shape="pill" size="sm" />
     </div>
   );
 }
