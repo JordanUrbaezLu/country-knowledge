@@ -82,6 +82,13 @@ export default function RoundHud({
           {mode ? MODE_LABELS[mode] : ""}
         </p>
 
+        {/* Easy-mode hint: which continent the answer is on (same as solo). */}
+        {room.difficulty === "easy" && target?.continent && (
+          <p className="mt-1 text-center text-xs font-semibold text-sky-300">
+            🌍 Hint: {target.continent}
+          </p>
+        )}
+
         {flag && (
           <img
             src={flag}

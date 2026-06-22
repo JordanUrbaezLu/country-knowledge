@@ -22,7 +22,7 @@ export default function JoinScreen({ initialCode }: { initialCode?: string | nul
   const [name, setName] = useState(user?.displayName ?? savedName);
   const [code, setCode] = useState((initialCode ?? "").toUpperCase());
   const [mode, setMode] = useState<"home" | "join">(initialCode ? "join" : "home");
-  const [showLogin, setShowLogin] = useState(false);
+  const [authTab, setAuthTab] = useState<"signup" | "login" | null>(null);
 
   // Keep the name in sync with auth: logging in (here or via the account chip)
   // fills in the account name; logging out reverts to the saved guest name
@@ -129,23 +129,37 @@ export default function JoinScreen({ initialCode }: { initialCode?: string | nul
         )}
 
         {!user && (
-          <button
-            onClick={() => setShowLogin(true)}
-            className="mt-4 w-full text-center text-xs font-semibold text-sky-300 transition hover:text-sky-200"
-          >
-            Have an account? Log in
-          </button>
+          <div className="mt-4 flex items-center justify-center gap-2 text-xs text-slate-400">
+            <button
+              onClick={() => setAuthTab("signup")}
+              className="btn btn-ghost flex-1 rounded-lg px-3 py-2 text-sm font-semibold"
+            >
+              Sign up
+            </button>
+            <button
+              onClick={() => setAuthTab("login")}
+              className="btn btn-ghost flex-1 rounded-lg px-3 py-2 text-sm font-semibold"
+            >
+              Log in
+            </button>
+          </div>
+        )}
+        {!user && (
+          <p className="mt-2 text-center text-[11px] text-slate-500">
+            Sign in to save your stats, XP &amp; level — or just play as a guest.
+          </p>
         )}
       </div>
 
-      {/* Inline login — overlays in place so the room link / context is preserved. */}
-      {showLogin && (
+      {/* Inline account screen — overlays in place so the room link / context is
+          preserved. Opens on the chosen tab; the screen itself can switch between
+          sign up and log in. */}
+      {authTab && (
         <AccountScreen
-          initialTab="login"
-          title="Log in"
-          subtitle="We'll use your account name and save your stats."
-          onClose={() => setShowLogin(false)}
-          onDone={() => setShowLogin(false)}
+          initialTab={authTab}
+          subtitle="Save your stats, XP & level across devices."
+          onClose={() => setAuthTab(null)}
+          onDone={() => setAuthTab(null)}
         />
       )}
     </div>
